@@ -4,16 +4,48 @@ import sqlite3
 import requests
 import pydeck as pdk
 import altair as alt
+import subprocess
+import os
+import time
 
-st.set_page_config(page_title="全台 YouBike 即時監控", layout="wide")
+st.set_page_config(page_title="全台 YouBike 2.0 即時查詢系統", layout="wide")
+
+def init_app():
+    # 建立一個佔位容器
+    placeholder = st.empty()
+    
+    if not os.path.exists('stations.db'):
+        # 顯示初始化訊息
+        with placeholder.container():
+            st.info("偵測到尚未建立站點資料庫，正在執行初始化...")
+            
+        try:
+            # 執行爬蟲
+            subprocess.run(["python", "data_collector.py"], check=True)
+            
+            # 將內容替換為成功訊息
+            with placeholder.container():
+                st.success("初始化完成！")
+            
+            # 暫停 2 秒讓使用者看到成功訊息
+            time.sleep(2)
+            
+        except subprocess.CalledProcessError as e:
+            with placeholder.container():
+                st.error(f"初始化失敗: {e}")
+            time.sleep(2)
+    
+    # 清空容器，這會讓「初始化完成」的字樣消失
+    placeholder.empty()
+
+# 在頁面載入時執行一次
+init_app()
 
 @st.cache_data
 def get_stations():
     conn = sqlite3.connect('stations.db')
     df = pd.read_sql("SELECT * FROM stations", conn)
     conn.close()
-    # 假設你需要將 district_tw 對應到縣市，這裡為了範例簡化
-    # 如果 stations.db 沒有縣市欄位，可以手動建立一個簡易對照表
     return df
 
 def get_realtime_info_batch(station_nos):
@@ -60,7 +92,7 @@ stations_df = get_stations()
 stations_df['city_name'] = stations_df['area_code_2'].map(CITY_MAP)
 
 # --- 二階聯動選單 ---
-# 1. 縣市 (這裡假設 stations.db 有縣市資訊，若無請用 district_tw 代替或手動分組)
+# 1. 縣市 
 selected_city = st.sidebar.selectbox("請選擇縣市", list(CITY_MAP.values())) # 範例
 
 city_code = [k for k, v in CITY_MAP.items() if v == selected_city][0]
@@ -69,16 +101,8 @@ target_stations = stations_df[stations_df['area_code_2'] == city_code]
 selected_dist = st.sidebar.selectbox("請選擇行政區", sorted(target_stations['district_tw'].unique()))
 target_stations = target_stations[target_stations['district_tw'] == selected_dist]
 
-# --- 2. 欄位中文化對應字典 ---
-column_mapping = {
-    'sna_clean': '站點名稱',
-    'Quantity': '總車數',
-    'available_rent_bikes': '可借車數',
-    'mday': '更新時間'
-}
-
 if st.sidebar.button("查詢該區即時資訊"):
-    with st.spinner(f'正在查詢 {selected_dist} 的站點資訊...'):
+    with st.spinner(f'正在查詢 {selected_city} {selected_dist} 的站點資訊...'):
         realtime_list = []
         # 一次取得該區所有站點 ID
         sno_list = target_stations['station_no'].tolist()
@@ -102,7 +126,7 @@ if st.sidebar.button("查詢該區即時資訊"):
             df['lng'] = df['lng'].astype(float)
 
             # 2. 地圖顯示區塊修正
-            st.subheader(f"{selected_dist} 站點分佈")
+            st.subheader(f"{selected_city} {selected_dist} 站點分佈")
             st.pydeck_chart(pdk.Deck(
                 initial_view_state=pdk.ViewState(
                     latitude=df['lat'].mean(), 
@@ -118,22 +142,30 @@ if st.sidebar.button("查詢該區即時資訊"):
                     get_radius=40,
                     pickable=True
                 )],
-                tooltip={"text": "站點: {name_tw}\n可借車數: {available_spaces}"}
+                tooltip={"text": "站點名稱: {name_tw}\n站點位置: {address_tw}\n可借: {available_spaces}\n可還: {empty_spaces}"}
             ))
 
             # 橫向長條圖
             st.subheader("前 10 名可借站點")
             chart_data = df.nlargest(10, 'available_spaces')[['name_tw', 'available_spaces']]
             chart = alt.Chart(chart_data).mark_bar(color='#76C8FF').encode(
-                x=alt.X('available_spaces', title='可借車數'),
-                y=alt.Y('name_tw', title='站點名稱', sort='-x', axis=alt.Axis(labelLimit=300))
+                x=alt.X('available_spaces', title='可借'),
+                y=alt.Y('name_tw', title=['站', '點', '名', '稱'], sort='-x', axis=alt.Axis(labelLimit=300, titleAngle=0))
+            ).properties(height=400)
+            st.altair_chart(chart.configure_axis(titleAngle=0), width='stretch')
+
+            st.subheader("前 10 名可還站點")
+            chart_data = df.nlargest(10, 'empty_spaces')[['name_tw', 'empty_spaces']]
+            chart = alt.Chart(chart_data).mark_bar(color='#76C8FF').encode(
+                x=alt.X('empty_spaces', title='可還'),
+                y=alt.Y('name_tw', title=['站', '點', '名', '稱'], sort='-x', axis=alt.Axis(labelLimit=300, titleAngle=0))
             ).properties(height=400)
             st.altair_chart(chart.configure_axis(titleAngle=0), width='stretch')
 
             # 表格顯示 (使用中文化設定)
-            st.subheader("原始資料明細")
-            st.dataframe(df[['name_tw', 'available_spaces', 'empty_spaces']].rename(columns={
-                'name_tw': '站點名稱', 'available_spaces': '可借車數', 'empty_spaces': '空位數'
+            st.subheader("所有站點即時資訊")
+            st.dataframe(df[['name_tw', 'address_tw', 'available_spaces', 'empty_spaces']].rename(columns={
+                'name_tw': '站點名稱', 'address_tw': '站點位置', 'available_spaces': '可借', 'empty_spaces': '可還'
             }), column_config={"站點名稱": st.column_config.TextColumn(width="large")}, hide_index=True)
         else:
-            st.error(f"在 {selected_dist} 找不到即時資料，請確認該區是否為 YouBike 2.0 營運範圍。")
+            st.error(f"在 {selected_city} {selected_dist} 找不到即時資料，請確認該區是否為 YouBike 2.0 營運範圍。")

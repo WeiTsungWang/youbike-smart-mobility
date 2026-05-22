@@ -17,8 +17,8 @@ def fetch_and_save_stations():
         df = pd.DataFrame(stations)
         
         # 選取我們要的欄位
-        # station_no: 站點ID, name_tw: 站點名稱, district_tw: 行政區, lat/lng: 經緯度, area_code_2: 縣市代碼
-        df_clean = df[['station_no', 'name_tw', 'district_tw', 'lat', 'lng', 'area_code_2']]
+        # station_no: 站點ID, name_tw: 站點名稱, district_tw: 行政區, lat/lng: 經緯度, area_code_2: 縣市代碼, address_tw: 地址
+        df_clean = df[['station_no', 'name_tw', 'district_tw', 'lat', 'lng', 'area_code_2', 'address_tw']]
         
         # 存入 stations.db
         conn = sqlite3.connect('stations.db')
