@@ -1,0 +1,10 @@
+# Python 相關
+__pycache__/
+*.py[cod]
+
+# Anaconda 虛擬環境
+venv/
+env/
+
+# 資料庫檔案
+*.db
