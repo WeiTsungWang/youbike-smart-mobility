@@ -1,14 +1,16 @@
 import streamlit as st
 import pandas as pd
-import sqlite3
 import requests
 import pydeck as pdk
 import altair as alt
 import subprocess
+import sys
 import os
 import time
 
-st.set_page_config(page_title="全台 YouBike 2.0 即時查詢系統", layout="wide")
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils import get_station_data
 
 def init_app():
     # 建立一個佔位容器
@@ -40,13 +42,6 @@ def init_app():
 
 # 在頁面載入時執行一次
 init_app()
-
-@st.cache_data
-def get_stations():
-    conn = sqlite3.connect('stations.db')
-    df = pd.read_sql("SELECT * FROM stations", conn)
-    conn.close()
-    return df
 
 def get_realtime_info_batch(station_nos):
     """改為 POST 請求，符合 API 規範"""
@@ -88,20 +83,36 @@ CITY_MAP = {
     "14": "屏東縣", "15": "臺東縣", "16": "光復鄉"
 }
 
-stations_df = get_stations()
+stations_df = get_station_data()
 stations_df['city_name'] = stations_df['area_code_2'].map(CITY_MAP)
 
 # --- 二階聯動選單 ---
 # 1. 縣市 
-selected_city = st.sidebar.selectbox("請選擇縣市", list(CITY_MAP.values())) # 範例
+# selected_city = st.sidebar.selectbox("請選擇縣市", list(CITY_MAP.values())) # 範例
+
+# city_code = [k for k, v in CITY_MAP.items() if v == selected_city][0]
+# target_stations = stations_df[stations_df['area_code_2'] == city_code]
+
+# selected_dist = st.sidebar.selectbox("請選擇行政區", sorted(target_stations['district_tw'].unique()))
+# target_stations = target_stations[target_stations['district_tw'] == selected_dist]
+
+col1, col2, col3 = st.columns([2, 2, 1], vertical_alignment="bottom")
+
+with col1:
+    selected_city = st.selectbox("請選擇縣市", list(CITY_MAP.values()))
 
 city_code = [k for k, v in CITY_MAP.items() if v == selected_city][0]
 target_stations = stations_df[stations_df['area_code_2'] == city_code]
 
-selected_dist = st.sidebar.selectbox("請選擇行政區", sorted(target_stations['district_tw'].unique()))
+with col2:
+    selected_dist = st.selectbox("請選擇行政區", sorted(target_stations['district_tw'].unique()))
+
 target_stations = target_stations[target_stations['district_tw'] == selected_dist]
 
-if st.sidebar.button("查詢該區即時資訊"):
+with col3:
+    query_btn = st.button("查詢該區即時資訊")
+
+if query_btn:
     with st.spinner(f'正在查詢 {selected_city} {selected_dist} 的站點資訊...'):
         realtime_list = []
         # 一次取得該區所有站點 ID
@@ -117,7 +128,7 @@ if st.sidebar.button("查詢該區即時資訊"):
             df = df.drop(columns=['lat_x', 'lng_x'])
             # 並將 lat_y, lng_y 重新命名為 lat, lng，這樣你原本的程式碼就不用再改 _y 了
             df = df.rename(columns={'lat_y': 'lat', 'lng_y': 'lng'})
-            st.write("目前表格的欄位:", df.columns.tolist())
+            # st.write("目前表格的欄位:", df.columns.tolist())
             
             # 地圖顯示
             # 地圖顯示修正版：直接從 target_stations 獲取經緯度，確保不依賴 API 回傳的欄位
