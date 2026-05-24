@@ -12,6 +12,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils import get_station_data
 
+st.set_page_config(page_title="YouBike 智慧熱量估計系統", layout="wide")
+
 def init_app():
     # 建立一個佔位容器
     placeholder = st.empty()
@@ -86,6 +88,11 @@ CITY_MAP = {
 stations_df = get_station_data()
 stations_df['city_name'] = stations_df['area_code_2'].map(CITY_MAP)
 
+st.subheader("搜尋設定")
+search_mode = st.radio("搜尋方式", ["依地區搜尋", "輸入站點名稱"], horizontal=True)
+
+target_stations = stations_df.copy()
+
 # --- 二階聯動選單 ---
 # 1. 縣市 
 # selected_city = st.sidebar.selectbox("請選擇縣市", list(CITY_MAP.values())) # 範例
@@ -95,88 +102,105 @@ stations_df['city_name'] = stations_df['area_code_2'].map(CITY_MAP)
 
 # selected_dist = st.sidebar.selectbox("請選擇行政區", sorted(target_stations['district_tw'].unique()))
 # target_stations = target_stations[target_stations['district_tw'] == selected_dist]
+if search_mode == "依地區搜尋":
+    col1, col2, col3 = st.columns([2, 2, 1], vertical_alignment="bottom")
 
-col1, col2, col3 = st.columns([2, 2, 1], vertical_alignment="bottom")
+    with col1:
+        selected_city = st.selectbox("請選擇縣市", list(CITY_MAP.values()))
 
-with col1:
-    selected_city = st.selectbox("請選擇縣市", list(CITY_MAP.values()))
+    city_code = [k for k, v in CITY_MAP.items() if v == selected_city][0]
+    target_stations = stations_df[stations_df['area_code_2'] == city_code]
 
-city_code = [k for k, v in CITY_MAP.items() if v == selected_city][0]
-target_stations = stations_df[stations_df['area_code_2'] == city_code]
+    with col2:
+        selected_dist = st.selectbox("請選擇行政區", sorted(target_stations['district_tw'].unique()))
 
-with col2:
-    selected_dist = st.selectbox("請選擇行政區", sorted(target_stations['district_tw'].unique()))
+    target_stations = target_stations[target_stations['district_tw'] == selected_dist]
 
-target_stations = target_stations[target_stations['district_tw'] == selected_dist]
+    with col3:
+        query_btn = st.button("查詢該區即時資訊")
+else: # 輸入站點名稱模式
+    col1, col2 = st.columns([3, 1], vertical_alignment="bottom")
+    station_list = stations_df['name_tw'].tolist()
 
-with col3:
-    query_btn = st.button("查詢該區即時資訊")
+    with col1:
+        search_query = st.selectbox("選擇站點", station_list, index=None, placeholder="請選擇站點名稱...")
+    
+    with col2:
+        query_btn = st.button("查詢特定站點")
+    
+    if search_query:
+        # 使用字串包含來搜尋
+        target_stations = target_stations[target_stations['name_tw'].str.contains(search_query, na=False)]
+    else:
+        target_stations = pd.DataFrame() # 未輸入時為空
 
 if query_btn:
-    with st.spinner(f'正在查詢 {selected_city} {selected_dist} 的站點資訊...'):
-        realtime_list = []
-        # 一次取得該區所有站點 ID
-        sno_list = target_stations['station_no'].tolist()
-        
-        # 批次呼叫
-        realtime_data = get_realtime_info_batch(sno_list)
-        
-        if realtime_data:
-            df_api = pd.DataFrame(realtime_data)
-            df = pd.merge(df_api, target_stations, on='station_no', how='inner')
-            # 在 merge 之後加上這段清理邏輯
-            df = df.drop(columns=['lat_x', 'lng_x'])
-            # 並將 lat_y, lng_y 重新命名為 lat, lng，這樣你原本的程式碼就不用再改 _y 了
-            df = df.rename(columns={'lat_y': 'lat', 'lng_y': 'lng'})
-            # st.write("目前表格的欄位:", df.columns.tolist())
+    if target_stations.empty:
+        st.warning("查無站點資料，請調整關鍵字。")
+    else:
+        with st.spinner(f'正在查詢即時資訊...'):
+            # 一次取得該區所有站點 ID
+            sno_list = target_stations['station_no'].tolist()
             
-            # 地圖顯示
-            # 地圖顯示修正版：直接從 target_stations 獲取經緯度，確保不依賴 API 回傳的欄位
-            # 1. 確保經緯度已經是 float 型態 (在 merge 之後執行)
-            df['lat'] = df['lat'].astype(float)
-            df['lng'] = df['lng'].astype(float)
+            # 批次呼叫
+            realtime_data = get_realtime_info_batch(sno_list)
+            
+            if realtime_data:
+                df_api = pd.DataFrame(realtime_data)
+                df = pd.merge(df_api, target_stations, on='station_no', how='inner')
+                # 在 merge 之後加上這段清理邏輯
+                df = df.drop(columns=['lat_x', 'lng_x'])
+                # 並將 lat_y, lng_y 重新命名為 lat, lng，這樣你原本的程式碼就不用再改 _y 了
+                df = df.rename(columns={'lat_y': 'lat', 'lng_y': 'lng'})
+                # st.write("目前表格的欄位:", df.columns.tolist())
+                
+                # 地圖顯示
+                # 地圖顯示修正版：直接從 target_stations 獲取經緯度，確保不依賴 API 回傳的欄位
+                # 1. 確保經緯度已經是 float 型態 (在 merge 之後執行)
+                df['lat'] = df['lat'].astype(float)
+                df['lng'] = df['lng'].astype(float)
 
-            # 2. 地圖顯示區塊修正
-            st.subheader(f"{selected_city} {selected_dist} 站點分佈")
-            st.pydeck_chart(pdk.Deck(
-                initial_view_state=pdk.ViewState(
-                    latitude=df['lat'].mean(), 
-                    longitude=df['lng'].mean(), 
-                    zoom=14
-                ),
-                layers=[pdk.Layer(
-                    "ScatterplotLayer", 
-                    df,
-                    # 直接使用欄位名稱，不要再寫 .astype(float)
-                    get_position='[lng, lat]', 
-                    get_color='[200, 30, 0, 160]',
-                    get_radius=40,
-                    pickable=True
-                )],
-                tooltip={"text": "站點名稱: {name_tw}\n站點位置: {address_tw}\n可借: {available_spaces}\n可還: {empty_spaces}"}
-            ))
+                # 2. 地圖顯示區塊修正
+                st.subheader(f"站點分佈")
+                st.pydeck_chart(pdk.Deck(
+                    initial_view_state=pdk.ViewState(
+                        latitude=df['lat'].mean(), 
+                        longitude=df['lng'].mean(), 
+                        zoom=14
+                    ),
+                    layers=[pdk.Layer(
+                        "ScatterplotLayer", 
+                        df,
+                        # 直接使用欄位名稱，不要再寫 .astype(float)
+                        get_position='[lng, lat]', 
+                        get_color='[200, 30, 0, 160]',
+                        get_radius=40,
+                        pickable=True
+                    )],
+                    tooltip={"text": "站點名稱: {name_tw}\n站點位置: {address_tw}\n可借: {available_spaces}\n可還: {empty_spaces}"}
+                ))
 
-            # 橫向長條圖
-            st.subheader("前 10 名可借站點")
-            chart_data = df.nlargest(10, 'available_spaces')[['name_tw', 'available_spaces']]
-            chart = alt.Chart(chart_data).mark_bar(color='#76C8FF').encode(
-                x=alt.X('available_spaces', title='可借'),
-                y=alt.Y('name_tw', title=['站', '點', '名', '稱'], sort='-x', axis=alt.Axis(labelLimit=300, titleAngle=0))
-            ).properties(height=400)
-            st.altair_chart(chart.configure_axis(titleAngle=0), width='stretch')
+                # 橫向長條圖
+                st.subheader("前 10 名可借站點")
+                chart_data = df.nlargest(10, 'available_spaces')[['name_tw', 'available_spaces']]
+                chart = alt.Chart(chart_data).mark_bar(color='#76C8FF').encode(
+                    x=alt.X('available_spaces', title='可借'),
+                    y=alt.Y('name_tw', title=['站', '點', '名', '稱'], sort='-x', axis=alt.Axis(labelLimit=300, titleAngle=0))
+                ).properties(height=400)
+                st.altair_chart(chart.configure_axis(titleAngle=0), width='stretch')
 
-            st.subheader("前 10 名可還站點")
-            chart_data = df.nlargest(10, 'empty_spaces')[['name_tw', 'empty_spaces']]
-            chart = alt.Chart(chart_data).mark_bar(color='#76C8FF').encode(
-                x=alt.X('empty_spaces', title='可還'),
-                y=alt.Y('name_tw', title=['站', '點', '名', '稱'], sort='-x', axis=alt.Axis(labelLimit=300, titleAngle=0))
-            ).properties(height=400)
-            st.altair_chart(chart.configure_axis(titleAngle=0), width='stretch')
+                st.subheader("前 10 名可還站點")
+                chart_data = df.nlargest(10, 'empty_spaces')[['name_tw', 'empty_spaces']]
+                chart = alt.Chart(chart_data).mark_bar(color='#76C8FF').encode(
+                    x=alt.X('empty_spaces', title='可還'),
+                    y=alt.Y('name_tw', title=['站', '點', '名', '稱'], sort='-x', axis=alt.Axis(labelLimit=300, titleAngle=0))
+                ).properties(height=400)
+                st.altair_chart(chart.configure_axis(titleAngle=0), width='stretch')
 
-            # 表格顯示 (使用中文化設定)
-            st.subheader("所有站點即時資訊")
-            st.dataframe(df[['name_tw', 'address_tw', 'available_spaces', 'empty_spaces']].rename(columns={
-                'name_tw': '站點名稱', 'address_tw': '站點位置', 'available_spaces': '可借', 'empty_spaces': '可還'
-            }), column_config={"站點名稱": st.column_config.TextColumn(width="large")}, hide_index=True)
-        else:
-            st.error(f"在 {selected_city} {selected_dist} 找不到即時資料，請確認該區是否為 YouBike 2.0 營運範圍。")
+                # 表格顯示 (使用中文化設定)
+                st.subheader("所有站點即時資訊")
+                st.dataframe(df[['name_tw', 'address_tw', 'available_spaces', 'empty_spaces']].rename(columns={
+                    'name_tw': '站點名稱', 'address_tw': '站點位置', 'available_spaces': '可借', 'empty_spaces': '可還'
+                }), column_config={"站點名稱": st.column_config.TextColumn(width="large")}, hide_index=True)
+            else:
+                st.error(f"在找不到即時資料，請確認是否為 YouBike 2.0 營運範圍。")
