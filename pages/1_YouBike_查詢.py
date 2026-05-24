@@ -123,7 +123,7 @@ else: # 輸入站點名稱模式
     station_list = stations_df['name_tw'].tolist()
 
     with col1:
-        search_query = st.selectbox("選擇站點", station_list, index=None, placeholder="請選擇站點名稱...")
+        search_query = st.selectbox("選擇站點", station_list, index=None, placeholder="請輸入站點名稱...")
     
     with col2:
         query_btn = st.button("查詢特定站點")
