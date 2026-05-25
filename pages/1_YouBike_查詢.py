@@ -180,25 +180,26 @@ if query_btn:
                     tooltip={"text": "站點名稱: {name_tw}\n站點位置: {address_tw}\n可借: {available_spaces}\n可還: {empty_spaces}"}
                 ))
 
+                if search_mode == "依地區搜尋":
                 # 橫向長條圖
-                st.subheader("前 10 名可借站點")
-                chart_data = df.nlargest(10, 'available_spaces')[['name_tw', 'available_spaces']]
-                chart = alt.Chart(chart_data).mark_bar(color='#76C8FF').encode(
-                    x=alt.X('available_spaces', title='可借'),
-                    y=alt.Y('name_tw', title=['站', '點', '名', '稱'], sort='-x', axis=alt.Axis(labelLimit=300, titleAngle=0))
-                ).properties(height=400)
-                st.altair_chart(chart.configure_axis(titleAngle=0), width='stretch')
+                    st.subheader("前 10 名可借站點")
+                    chart_data = df.nlargest(10, 'available_spaces')[['name_tw', 'available_spaces']]
+                    chart = alt.Chart(chart_data).mark_bar(color='#76C8FF').encode(
+                        x=alt.X('available_spaces', title='可借'),
+                        y=alt.Y('name_tw', title=['站', '點', '名', '稱'], sort='-x', axis=alt.Axis(labelLimit=300, titleAngle=0))
+                    ).properties(height=400)
+                    st.altair_chart(chart.configure_axis(titleAngle=0), width='stretch')
 
-                st.subheader("前 10 名可還站點")
-                chart_data = df.nlargest(10, 'empty_spaces')[['name_tw', 'empty_spaces']]
-                chart = alt.Chart(chart_data).mark_bar(color='#76C8FF').encode(
-                    x=alt.X('empty_spaces', title='可還'),
-                    y=alt.Y('name_tw', title=['站', '點', '名', '稱'], sort='-x', axis=alt.Axis(labelLimit=300, titleAngle=0))
-                ).properties(height=400)
-                st.altair_chart(chart.configure_axis(titleAngle=0), width='stretch')
+                    st.subheader("前 10 名可還站點")
+                    chart_data = df.nlargest(10, 'empty_spaces')[['name_tw', 'empty_spaces']]
+                    chart = alt.Chart(chart_data).mark_bar(color='#76C8FF').encode(
+                        x=alt.X('empty_spaces', title='可還'),
+                        y=alt.Y('name_tw', title=['站', '點', '名', '稱'], sort='-x', axis=alt.Axis(labelLimit=300, titleAngle=0))
+                    ).properties(height=400)
+                    st.altair_chart(chart.configure_axis(titleAngle=0), width='stretch')
 
                 # 表格顯示 (使用中文化設定)
-                st.subheader("所有站點即時資訊")
+                st.subheader("站點即時資訊")
                 st.dataframe(df[['name_tw', 'address_tw', 'available_spaces', 'empty_spaces']].rename(columns={
                     'name_tw': '站點名稱', 'address_tw': '站點位置', 'available_spaces': '可借', 'empty_spaces': '可還'
                 }), column_config={"站點名稱": st.column_config.TextColumn(width="large")}, hide_index=True)
