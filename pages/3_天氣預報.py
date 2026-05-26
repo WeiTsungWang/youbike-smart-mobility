@@ -32,11 +32,12 @@ if st.button("查詢天氣"):
     with st.spinner(f'正在為您查詢 {selected_city} 的天氣資訊...'):
         # 只呼叫一次 API
         data = get_weather_forecast(lat, lon)
-        prob = data['daily']['precipitation_probability_max'][0]
         
         if data:
             curr = data['current']
             
+            prob = data['daily']['precipitation_probability_max'][0]
+
             # 1. 頂部摘要 (只顯示關鍵指標，避開溫度重複)
             st.subheader(f"{selected_city} 當前概況")
             col1, col2, col3, col4 = st.columns(4)

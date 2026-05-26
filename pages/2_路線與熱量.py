@@ -91,8 +91,8 @@ if st.button("計算路徑"):
                     if mode == "YouBike":
                         # 計算步行段 (起點->借車站, 還車站->終點)
                         # 這裡建議使用簡單的直線距離 (Haversine) 或再呼叫兩次 foot API
-                        walk_dist_km = (calculate_dist(start_lat, start_lon, s_lat, s_lon) + 
-                                        calculate_dist(e_lat, e_lon, end_lat, end_lon))
+                        walk_dist_km = (get_osrm_distance(start_lat, start_lon, s_lat, s_lon, "foot") + 
+                                        get_osrm_distance(e_lat, e_lon, end_lat, end_lon, "foot"))
                         
                         # 計算騎乘段 (借車站->還車站)
                         ride_dist_km = get_osrm_distance(s_lat, s_lon, e_lat, e_lon, "bicycle")

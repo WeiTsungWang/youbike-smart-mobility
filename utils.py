@@ -30,13 +30,9 @@ def get_coords(address):
             return float(res[0]['lat']), float(res[0]['lon'])
     except:
         return None, None
-    
     return None, None
+
 def get_osrm_distance(lat1, lon1, lat2, lon2, profile):
     url = f"http://router.project-osrm.org/route/v1/{profile}/{lon1},{lat1};{lon2},{lat2}"
     res = requests.get(url).json()
     return res['routes'][0]['distance'] / 1000 # 回傳 km
-
-def calculate_dist(lat1, lon1, lat2, lon2):
-    # 使用畢氏定理計算直線距離(簡易版，作為步行估算足夠)
-    return math.sqrt((lat1-lat2)**2 + (lon1-lon2)**2) * 111
