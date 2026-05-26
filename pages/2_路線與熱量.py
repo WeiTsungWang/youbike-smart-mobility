@@ -9,28 +9,28 @@ import os
 import math
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils import calculate_dist, get_osrm_distance, get_station_data, get_coords
+from utils import get_osrm_distance, get_station_data, find_nearest_station
 
-def find_nearest_station(lat, lon, df):
-    df['dist'] = ((df['lat'] - lat)**2 + (df['lng'] - lon)**2)
-    return df.loc[df['dist'].idxmin()]
+st.title("🚲 路線規劃與熱量估算")
+
+if 'address_map' not in st.session_state:
+    st.session_state.address_map = {}
 
 def search_address(searchterm: str):
     if not searchterm or len(searchterm) < 3:
         return []
     
-    # 限制搜尋範圍在台灣 (countrycodes='tw')
     url = f"https://nominatim.openstreetmap.org/search?q={searchterm}&format=json&limit=5&countrycodes=tw"
     headers = {'User-Agent': 'YouBikeApp/1.0'}
     
     try:
         response = requests.get(url, headers=headers).json()
-        # 回傳一個列表，格式為 [顯示文字, 原始資料]
-        return [res['display_name'] for res in response]
+        results = {res['display_name']: [float(res['lat']), float(res['lon'])] for res in response}
+        # 更新全域的查詢紀錄
+        st.session_state.address_map.update(results)
+        return list(results.keys()) # searchbox 選單只需要顯示 Key
     except:
         return []
-
-st.title("🚲 路線規劃與熱量估算")
 
 # stations_df = get_station_data()
 # station_list = stations_df['name_tw'].tolist()
@@ -46,18 +46,30 @@ with col3:
     weight = st.number_input("體重 (kg)", value=65)
 
 if st.button("計算路徑"):
+    start_coords = st.session_state.address_map.get(start_addr)
+    end_coords = st.session_state.address_map.get(end_addr)
+
+    st.write(f"DEBUG: start_addr 的類型是 {type(start_addr)}, 內容是: {start_addr}")
+    st.write(f"DEBUG: end_addr 的類型是 {type(end_addr)}, 內容是: {end_addr}")
+
+    st.write(f"DEBUG: start_coords 的類型是 {type(start_coords)}, 內容是: {start_coords}")
+    st.write(f"DEBUG: end_coords 的類型是 {type(end_coords)}, 內容是: {end_coords}")
+
     if not start_addr and not end_addr:
         st.warning("請先輸入起點與終點地址！")
     elif not start_addr:
         st.warning("請先輸入起點地址！")
     elif not end_addr:
         st.warning("請先輸入終點地址！")
+    elif not start_coords or not end_coords:
+        st.error("找不到座標！請確保您是從選單中選取地址的。")
     else:
-        start_lat, start_lon = get_coords(start_addr)
-        end_lat, end_lon = get_coords(end_addr)
+        start_lat, start_lon = start_coords
+        end_lat, end_lon = end_coords
         profile = "foot" if mode == "步行" else "bicycle"
         
         if not (start_lat and end_lat):
+            print(start_addr, end_addr)
             st.error("找不到地址，請輸入更明確的地點。")
         else:
             # YouBike 邏輯：找最近站點
@@ -136,8 +148,6 @@ if st.button("計算路徑"):
                         m2.metric("騎乘時間", f"{int(time_min)} 分鐘")
                         m3.metric("總消耗熱量", f"{int(calories)} 大卡")
 
-
-                    
                     # 顯示地圖
                     path_data = [[row['lon'], row['lat']] for _, row in df_route.iterrows()]
 
@@ -157,21 +167,46 @@ if st.button("計算路徑"):
                     layers = []
 
                     if mode == "YouBike":
+                        # 1. 取得三段路由的路徑幾何資料
+                        def get_route_geometry(from_lat, from_lon, to_lat, to_lon, profile):
+                            url = f"http://router.project-osrm.org/route/v1/{profile}/{from_lon},{from_lat};{to_lon},{to_lat}?overview=full"
+                            res = requests.get(url).json()
+                            if res['code'] == 'Ok':
+                                return polyline.decode(res['routes'][0]['geometry'])
+                            return []
+
+                        walk_path1 = get_route_geometry(start_lat, start_lon, s_lat, s_lon, "foot")
+                        bike_path = get_route_geometry(s_lat, s_lon, e_lat, e_lon, "bicycle")
+                        walk_path2 = get_route_geometry(e_lat, e_lon, end_lat, end_lon, "foot")
+
+                        # 2. 將路徑資料轉換為 PyDeck 需要的格式
+                        # 注意：OSRM 回傳的是 (lat, lon)，PyDeck 需要 [lon, lat]
+                        walk_data1 = [[p[1], p[0]] for p in walk_path1]
+                        bike_data = [[p[1], p[0]] for p in bike_path]
+                        walk_data2 = [[p[1], p[0]] for p in walk_path2]
+
+                        # 3. 繪製圖層
                         layers.append(pdk.Layer(
                             "PathLayer",
-                            data=[
-                                {"path": [[start_lon, start_lat], [s_lon, s_lat]], "name": "步行路段"}, # 起點到借車
-                                {"path": [[e_lon, e_lat], [end_lon, end_lat]], "name": "步行路段"}      # 還車到終點
-                            ],
+                            data=[{"path": walk_data1, "name": "步行路段"}],
                             get_path="path",
-                            get_color=[0, 255, 255, 200], # 亮青色 (Cyan)
+                            get_color=[0, 255, 255, 200],
                             get_width=8,
-                            get_dash_array=[10, 5],      # [線長, 間隔] - 這就是虛線的關鍵！
+                            get_dash_array=[10, 5],
                             pickable=True,
                         ))
                         layers.append(pdk.Layer(
                             "PathLayer",
-                            data=[{"path": path_data, "name": "YouBike騎乘路段"}],
+                            data=[{"path": walk_data2, "name": "步行路段"}],
+                            get_path="path",
+                            get_color=[0, 255, 255, 200],
+                            get_width=8,
+                            get_dash_array=[10, 5],
+                            pickable=True,
+                        ))
+                        layers.append(pdk.Layer(
+                            "PathLayer",
+                            data=[{"path": bike_data, "name": "YouBike騎乘路段"}],
                             get_path="path",
                             get_color=[255, 69, 0, 200],
                             get_width=8,

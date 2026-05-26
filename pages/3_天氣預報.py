@@ -2,6 +2,7 @@ import pandas as pd
 import streamlit as st
 import sys
 import os
+from datetime import datetime, timedelta
 
 # 加入根目錄以匯入 utils
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -62,10 +63,30 @@ if st.button("查詢天氣"):
 
             # 一週預報 (表格化)
             st.subheader("🗓️ 一週天氣預報")
-            daily = data['daily']
-            df_forecast = pd.DataFrame({
-                "日期": daily['time'],
-                "最高溫": daily['temperature_2m_max'],
-                "最低溫": daily['temperature_2m_min'],
-                "降雨機率 (%)": daily['precipitation_probability_max']
-            })
+            if data and 'daily' in data:
+                daily = data['daily']
+                
+                # 1. 建立一個函數來處理日期與星期對應
+                from datetime import datetime
+                weekdays = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"]
+                
+                # 確保資料長度一致 (Open-Meteo 通常給 7 天)
+                length = len(daily['time'])
+                
+                # 2. 生成星期清單
+                weekday_labels = [weekdays[datetime.strptime(d, "%Y-%m-%d").weekday()] for d in daily['time']]
+                
+                # 3. 建立 DataFrame
+                df_forecast = pd.DataFrame({
+                    "星期": weekday_labels,
+                    "日期": [d[5:] for d in daily['time']], # 顯示月-日
+                    "最高溫": daily['temperature_2m_max'],
+                    "最低溫": daily['temperature_2m_min'],
+                    "降雨機率 (%)": daily['precipitation_probability_max']
+                })
+                
+                # 4. 顯示表格
+                st.dataframe(df_forecast, use_container_width=True, hide_index=True)
+                
+            else:
+                st.error("無法取得天氣資料，請檢查連線狀態或稍後再試。")

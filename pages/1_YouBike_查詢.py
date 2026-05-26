@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import requests
 import pydeck as pdk
 import altair as alt
 import subprocess
@@ -10,7 +9,7 @@ import time
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils import get_station_data
+from utils import get_station_data, get_realtime_info_batch
 
 st.set_page_config(page_title="YouBike 智慧熱量估計系統", layout="wide")
 
@@ -44,37 +43,6 @@ def init_app():
 
 # 在頁面載入時執行一次
 init_app()
-
-def get_realtime_info_batch(station_nos):
-    """改為 POST 請求，符合 API 規範"""
-    url = "https://apis.youbike.com.tw/tw2/parkingInfo"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Referer": "https://youbike.com.tw/",
-    }
-    
-    all_data = []
-    chunk_size = 20
-    for i in range(0, len(station_nos), chunk_size):
-        chunk = station_nos[i:i + chunk_size]
-        # POST 的參數應該放在 'data' 或 'json' 中
-        payload = {'station_no[]': chunk}
-        try:
-            # 關鍵：改用 requests.post
-            response = requests.post(url, data=payload, headers=headers, timeout=10)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data['retCode'] == 1:
-                    all_data.extend(data['retVal']['data'])
-            else:
-                print(f"請求失敗，狀態碼: {response.status_code}")
-                # 印出回應內容以便除錯
-                print(response.text)
-        except Exception as e:
-            print(f"API 連線錯誤: {e}")
-            
-    return all_data
 
 st.title("🚲 全台 YouBike 2.0 即時查詢系統")
 
