@@ -160,9 +160,10 @@ if st.button("計算路徑"):
                     delta_lat = max_lat - min_lat
                     delta_lon = max_lon - min_lon
                     max_delta = max(delta_lat, delta_lon)
+                    padding = 0.02 # 這個 padding 確保起終點不會剛好卡在畫面邊緣
+                    search_radius = max_delta + padding
 
-                    zoom_level = 14 - math.log2(max_delta / 0.08 + 0.001)
-                    zoom_level = max(13, min(16, zoom_level))
+                    zoom_level = 13.0 - math.log10(search_radius + 0.001)
 
                     layers = []
 

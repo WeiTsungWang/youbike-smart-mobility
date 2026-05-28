@@ -1,3 +1,5 @@
+import math
+
 import streamlit as st
 import pandas as pd
 import pydeck as pdk
@@ -128,13 +130,23 @@ if query_btn:
                 df['lat'] = df['lat'].astype(float)
                 df['lng'] = df['lng'].astype(float)
 
+                # --- 在 st.pydeck_chart 之前插入此段 ---
+                # 1. 計算經緯度範圍 (Bounding Box)
+                lat_range = df['lat'].max() - df['lat'].min()
+                lon_range = df['lng'].max() - df['lng'].min()
+                max_delta = max(lat_range, lon_range, 0.01) # 至少設為 0.01 避免單一點崩潰
+                
+                # 2. 自動計算 Zoom (範圍約 11~15)
+                # 使用簡單的對數比例，讓範圍大的時候縮小，範圍小的時候放大
+                zoom_level = 11.0 - math.log2(max_delta / 0.3)
+
                 # 2. 地圖顯示區塊修正
                 st.subheader(f"站點分佈")
                 st.pydeck_chart(pdk.Deck(
                     initial_view_state=pdk.ViewState(
                         latitude=df['lat'].mean(), 
                         longitude=df['lng'].mean(), 
-                        zoom=14
+                        zoom=zoom_level
                     ),
                     layers=[pdk.Layer(
                         "ScatterplotLayer", 
