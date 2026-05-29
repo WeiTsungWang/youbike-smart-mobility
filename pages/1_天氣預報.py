@@ -62,8 +62,7 @@ if st.button("查詢天氣"):
                 "多雲/陰天": "☁️",
                 "雨天": "🌧️"
             }
-            # 除錯用，確認 API 給你的原始數據
-            st.write(f"DEBUG: Weather Code = {w_code}, Prob = {prob}%")
+            
             display_status = f"{status_emoji.get(status, '🌤️')} {status}"
             st.metric("天氣狀態", display_status)
             

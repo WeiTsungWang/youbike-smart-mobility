@@ -1,7 +1,7 @@
 import streamlit as st
 from streamlit_searchbox import st_searchbox
 import requests
-import polyline  # 需要先 pip install polyline
+import polyline
 import pandas as pd
 import pydeck as pdk
 import sys
@@ -32,9 +32,6 @@ def search_address(searchterm: str):
     except:
         return []
 
-# stations_df = get_station_data()
-# station_list = stations_df['name_tw'].tolist()
-
 mode = st.radio("選擇交通方式", ["步行", "自己的腳踏車", "YouBike"], horizontal=True)
 
 col1, col2, col3 = st.columns(3)
@@ -48,12 +45,6 @@ with col3:
 if st.button("計算路徑"):
     start_coords = st.session_state.address_map.get(start_addr)
     end_coords = st.session_state.address_map.get(end_addr)
-
-    st.write(f"DEBUG: start_addr 的類型是 {type(start_addr)}, 內容是: {start_addr}")
-    st.write(f"DEBUG: end_addr 的類型是 {type(end_addr)}, 內容是: {end_addr}")
-
-    st.write(f"DEBUG: start_coords 的類型是 {type(start_coords)}, 內容是: {start_coords}")
-    st.write(f"DEBUG: end_coords 的類型是 {type(end_coords)}, 內容是: {end_coords}")
 
     if not start_addr and not end_addr:
         st.warning("請先輸入起點與終點地址！")
@@ -112,14 +103,13 @@ if st.button("計算路徑"):
                     
                     if mode == "YouBike":
                         # 計算步行段 (起點->借車站, 還車站->終點)
-                        # 這裡建議使用簡單的直線距離 (Haversine) 或再呼叫兩次 foot API
                         walk_dist_km = (get_osrm_distance(start_lat, start_lon, s_lat, s_lon, "foot") + 
                                         get_osrm_distance(e_lat, e_lon, end_lat, end_lon, "foot"))
                         
                         # 計算騎乘段 (借車站->還車站)
                         ride_dist_km = get_osrm_distance(s_lat, s_lon, e_lat, e_lon, "bicycle")
                         
-                        # 熱量公式：步行 METs 約 3.5, 自行車 METs 約 6.0 - 8.0
+                        # 熱量公式：步行 METs 約 3.5, 自行車 METs 約 5.0
                         walk_calories = (3.5 * weight * (walk_dist_km / 5) )
                         ride_calories = (5.0 * weight * (ride_dist_km / 12))
                         calories = walk_calories + ride_calories
