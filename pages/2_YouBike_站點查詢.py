@@ -1,5 +1,4 @@
 import math
-
 import streamlit as st
 import pandas as pd
 import pydeck as pdk
@@ -11,7 +10,7 @@ import time
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils import get_station_data, get_realtime_info_batch
+from utils import get_station_data, get_realtime_info_batch, get_weather_forecast
 
 st.set_page_config(page_title="YouBike 智慧熱量估計系統", layout="wide")
 
@@ -59,7 +58,7 @@ stations_df = get_station_data()
 stations_df['city_name'] = stations_df['area_code_2'].map(CITY_MAP)
 
 st.subheader("搜尋設定")
-search_mode = st.radio("搜尋方式", ["依地區搜尋", "輸入站點名稱"], horizontal=True)
+search_mode = st.radio("搜尋方式", ["依地區搜尋", "依站點名稱搜尋"], horizontal=True)
 
 target_stations = stations_df.copy()
 
@@ -99,8 +98,14 @@ else: # 輸入站點名稱模式
         query_btn = st.button("查詢特定站點")
     
     if search_query:
-        # 使用字串包含來搜尋
-        target_stations = target_stations[target_stations['name_tw'].str.contains(search_query, na=False)]
+        # 1. 優先進行精確比對
+        exact_match = target_stations[target_stations['name_tw'] == search_query]
+        
+        # 2. 如果精確比對有資料，直接用；否則用模糊比對
+        if not exact_match.empty:
+            target_stations = exact_match
+        else:
+            target_stations = target_stations[target_stations['name_tw'].str.contains(search_query, na=False)]
     else:
         target_stations = pd.DataFrame() # 未輸入時為空
 
@@ -108,7 +113,32 @@ if query_btn:
     if target_stations.empty:
         st.warning("查無站點資料，請調整關鍵字。")
     else:
-        with st.spinner(f'正在查詢即時資訊...'):
+        # 計算該區域的中心點以查詢天氣
+        avg_lat = target_stations['lat'].mean()
+        avg_lon = target_stations['lng'].mean()
+
+        with st.spinner('正在查詢即時資訊與天氣...'):
+            # 取得天氣 (這裡重複利用你 utils 中的 get_weather_forecast)
+            weather_data = get_weather_forecast(avg_lat, avg_lon)
+            
+            if weather_data:
+                curr = weather_data['current']
+                prob = weather_data['daily']['precipitation_probability_max'][0]
+                w_code = curr['weather_code']
+                
+                # 簡單的天氣狀態判定
+                status = "晴天" if w_code < 2 else "陰天/多雲"
+                if 50 <= w_code <= 67: status = "雨天"
+                
+                # 顯示天氣建議 (這就是你要的顯示區塊)
+                st.subheader(f"📍 {selected_city + ' ' + selected_dist if search_mode == '依地區搜尋' else '該區域'} 天氣建議")
+                if prob > 50:
+                    st.error(f"☔ 降雨機率 {prob}%，建議攜帶雨具。")
+                elif "晴" in status:
+                    st.success("☀️ 天氣理想，適合騎乘 YouBike！")
+                else:
+                    st.info("☁️ 天氣尚可，適合短途騎行。")
+
             # 一次取得該區所有站點 ID
             sno_list = target_stations['station_no'].tolist()
             

@@ -9,7 +9,7 @@ import os
 import math
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils import get_osrm_distance, get_station_data, find_nearest_station
+from utils import get_osrm_distance, get_station_data, find_nearest_station, get_weather_forecast
 
 st.title("🚲 路線規劃與熱量估算")
 
@@ -72,6 +72,16 @@ if st.button("計算路徑"):
             print(start_addr, end_addr)
             st.error("找不到地址，請輸入更明確的地點。")
         else:
+            # --- 新增：查詢天氣 ---
+            avg_lat, avg_lon = (start_lat + end_lat) / 2, (start_lon + end_lon) / 2
+            weather_data = get_weather_forecast(avg_lat, avg_lon)
+            if weather_data:
+                prob = weather_data['daily']['precipitation_probability_max'][0]
+                status = "晴天" if weather_data['current']['weather_code'] < 2 else "雨天/多雲"
+                if prob > 50: st.error(f"☔ 降雨機率 {prob}%，建議攜帶雨具。")
+                elif "晴" in status: st.success("☀️ 天氣理想，適合騎乘！")
+                else: st.info("☁️ 天氣尚可，適合短途騎行。")
+
             # YouBike 邏輯：找最近站點
             if mode == "YouBike":
                 stations_df = get_station_data()

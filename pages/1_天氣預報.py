@@ -40,7 +40,7 @@ if st.button("查詢天氣"):
             prob = data['daily']['precipitation_probability_max'][0]
 
             # 1. 頂部摘要 (只顯示關鍵指標，避開溫度重複)
-            st.subheader(f"{selected_city} 當前概況")
+            st.subheader(f"{selected_city} 今日天氣")
             col1, col2, col3, col4 = st.columns(4)
             col1.metric("即時溫度", f"{curr['temperature_2m']}°C")
             col2.metric("濕度", f"{curr['relative_humidity_2m']}%")
@@ -48,9 +48,24 @@ if st.button("查詢天氣"):
             col4.metric("風速", f"{curr['wind_speed_10m']} km/h")
             # 這裡我們利用 weather_code 簡單轉譯狀態
             w_code = curr['weather_code']
-            status = "晴天" if w_code < 2 else "陰天/多雲"
-            if 50 <= w_code <= 67: status = "雨天"
-            col4.metric("天氣狀態", status)
+            # --- 優先級判斷 ---
+            if prob >= 50:
+                status = "雨天" # 強制覆寫
+            elif w_code == 0:
+                status = "晴天"
+            elif w_code <= 3:
+                status = "多雲/陰天"
+            else:
+                status = "雨天"
+            status_emoji = {
+                "晴天": "☀️",
+                "多雲/陰天": "☁️",
+                "雨天": "🌧️"
+            }
+            # 除錯用，確認 API 給你的原始數據
+            st.write(f"DEBUG: Weather Code = {w_code}, Prob = {prob}%")
+            display_status = f"{status_emoji.get(status, '🌤️')} {status}"
+            st.metric("天氣狀態", display_status)
             
             # 2. 動態建議 (邏輯改為從 data 中讀取降雨機率)
             prob = data['daily']['precipitation_probability_max'][0] # 當日預報機率
