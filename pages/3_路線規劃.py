@@ -15,8 +15,22 @@ st.set_page_config(page_title="路線規劃 | YouBike 智慧出行系統", layou
 
 st.title("🚲 路線規劃與熱量估算")
 
+# ==========================================
+# 1. 狀態初始化 (State Management)
+# ==========================================
 if 'address_map' not in st.session_state:
     st.session_state.address_map = {}
+if 'current_mode' not in st.session_state:
+    st.session_state.current_mode = "步行"
+if 'run_calc' not in st.session_state:
+    st.session_state.run_calc = False # 紀錄是否已經按過「計算路徑」
+
+# ==========================================
+# 2. 回呼函式 (Callback)
+# ==========================================
+# 這是解決 Radio 不同步的終極武器，確保在畫面重繪前就改好狀態
+def switch_to_walk():
+    st.session_state.current_mode = "步行"
 
 def search_address(searchterm: str):
     if not searchterm or len(searchterm) < 3:
@@ -34,7 +48,16 @@ def search_address(searchterm: str):
     except:
         return []
 
-mode = st.radio("選擇交通方式", ["步行", "自己的腳踏車", "YouBike"], horizontal=True)
+# ==========================================
+# 3. UI 元件
+# ==========================================
+# 最簡潔的寫法，直接讓 key 控制
+st.radio(
+    "選擇交通方式", 
+    ["步行", "自己的腳踏車", "YouBike"], 
+    key="current_mode",
+    horizontal=True
+)
 
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -44,28 +67,34 @@ with col2:
 with col3:
     weight = st.number_input("體重 (kg)", value=65)
 
+# ==========================================
+# 4. 核心邏輯區塊
+# ==========================================
+# 按下按鈕只負責改變狀態，不包攬所有計算邏輯
 if st.button("計算路徑"):
+    st.session_state.run_calc = True
+
+# 只要 run_calc 是 True，就維持顯示計算結果
+if st.session_state.run_calc:
     start_coords = st.session_state.address_map.get(start_addr)
     end_coords = st.session_state.address_map.get(end_addr)
 
     if not start_addr and not end_addr:
-        st.warning("請先輸入起點與終點地址！")
+        st.warning("請先輸入起點與終點！")
     elif not start_addr:
-        st.warning("請先輸入起點地址！")
+        st.warning("請先輸入起點！")
     elif not end_addr:
-        st.warning("請先輸入終點地址！")
+        st.warning("請先輸入終點！")
     elif not start_coords or not end_coords:
-        st.error("找不到座標！請確保您是從選單中選取地址的。")
+        st.error("找不到座標！請確保您是從選單中選取地點的。")
     else:
         start_lat, start_lon = start_coords
         end_lat, end_lon = end_coords
-        profile = "foot" if mode == "步行" else "bicycle"
         
         if not (start_lat and end_lat):
-            print(start_addr, end_addr)
             st.error("找不到地址，請輸入更明確的地點。")
         else:
-            # --- 新增：查詢天氣 ---
+            # --- 查詢天氣 ---
             avg_lat, avg_lon = (start_lat + end_lat) / 2, (start_lon + end_lon) / 2
             weather_data = get_weather_forecast(avg_lat, avg_lon)
             if weather_data:
@@ -76,7 +105,7 @@ if st.button("計算路徑"):
                 else: st.info("☁️ 天氣尚可，適合短途騎行。")
 
             # YouBike 邏輯：找最近站點
-            if mode == "YouBike":
+            if st.session_state.current_mode == "YouBike":
                 stations_df = get_station_data()
                 start_node = find_nearest_station(start_lat, start_lon, stations_df)
                 end_node = find_nearest_station(end_lat, end_lon, stations_df)
@@ -84,13 +113,34 @@ if st.button("計算路徑"):
                 # 更新座標為站點座標
                 s_lat, s_lon = start_node['lat'], start_node['lng']
                 e_lat, e_lon = end_node['lat'], end_node['lng']
-                st.write(f"🚗 幫您導航至最近站點：起點({start_node['name_tw']}) -> 終點({end_node['name_tw']})")
+
+                # --- 時間判斷邏輯 ---
+                # 1. 計算純步行時間 (時速 5 km/h)
+                walk_only_dist = get_osrm_distance(start_lat, start_lon, end_lat, end_lon, "foot")
+                walk_only_time = (walk_only_dist / 5) * 60
+                
+                # 2. 計算 YouBike 方案時間 (步行段 5km/h, 騎乘段 12km/h)
+                walk_dist = (get_osrm_distance(start_lat, start_lon, s_lat, s_lon, "foot") + 
+                             get_osrm_distance(e_lat, e_lon, end_lat, end_lon, "foot"))
+                ride_dist = get_osrm_distance(s_lat, s_lon, e_lat, e_lon, "bicycle")
+                
+                yb_time = (walk_dist / 5) * 60 + (ride_dist / 12) * 60
+
+                if yb_time > walk_only_time:
+                    st.warning(f"💡 建議直接步行：步行約 {int(walk_only_time)} 分鐘！")
+
+                    col_a, col_b = st.columns([1, 4])
+                                        
+                    # 這是最關鍵的修正：利用 on_click 觸發狀態改變！
+                    col_a.button("切換至步行模式", on_click=switch_to_walk)
+                                    
+                st.write(f"🚗 幫您導航至最近站點：\n起點({start_addr})\n -> 借車點({start_node['name_tw']})\n -> 終點({end_node['name_tw']})\n -> 終點({end_addr})")
             else:
                 s_lat, s_lon = start_lat, start_lon
                 e_lat, e_lon = end_lat, end_lon
 
             # 呼叫 OSRM (步行用 'foot', 自行車用 'bicycle')
-            profile = "foot" if mode == "步行" else "bicycle"
+            profile = "foot" if st.session_state.current_mode == "步行" else "bicycle"
             url = f"http://router.project-osrm.org/route/v1/{profile}/{s_lon},{s_lat};{e_lon},{e_lat}?overview=full"
             
             try:
@@ -103,13 +153,15 @@ if st.button("計算路徑"):
                     coords = polyline.decode(route['geometry'])
                     df_route = pd.DataFrame(coords, columns=['lat', 'lon'])
                     
-                    if mode == "YouBike":
+                    if st.session_state.current_mode == "YouBike":
                         # 計算步行段 (起點->借車站, 還車站->終點)
                         walk_dist_km = (get_osrm_distance(start_lat, start_lon, s_lat, s_lon, "foot") + 
                                         get_osrm_distance(e_lat, e_lon, end_lat, end_lon, "foot"))
                         
                         # 計算騎乘段 (借車站->還車站)
                         ride_dist_km = get_osrm_distance(s_lat, s_lon, e_lat, e_lon, "bicycle")
+
+                        total_dist_km = walk_dist_km + ride_dist_km
                         
                         # 熱量公式：步行 METs 約 3.5, 自行車 METs 約 5.0
                         walk_calories = (3.5 * weight * (walk_dist_km / 5) )
@@ -121,14 +173,14 @@ if st.button("計算路徑"):
                         time_min = walk_time_min + ride_time_min
                         
                         m1, m2, m3 = st.columns(3)
-                        m1.metric("總距離", f"{dist_km:.2f} km")
+                        m1.metric("總距離", f"{total_dist_km:.2f} km")
                         m1.write(f"包含步行 {walk_dist_km:.2f}km 與 騎乘 {ride_dist_km:.2f}km")
                         m2.metric("總時間", f"{int(time_min)} 分鐘")
                         m2.write(f"包含步行 {int(walk_time_min)}分鐘 與 騎乘 {int(ride_time_min)}分鐘")
                         m3.metric("總消耗熱量", f"{int(calories)} 大卡")
                         m3.write(f"包含步行 {walk_calories:.1f}大卡 與 騎乘 {ride_calories:.1f}大卡")
                         
-                    elif mode == "步行":
+                    elif st.session_state.current_mode == "步行":
                         dist_km = get_osrm_distance(start_lat, start_lon, end_lat, end_lon, "foot")
                         calories = (3.5 * weight * (dist_km / 5)) # 步行時速約 5km/h
 
@@ -169,7 +221,7 @@ if st.button("計算路徑"):
 
                     layers = []
 
-                    if mode == "YouBike":
+                    if st.session_state.current_mode == "YouBike":
                         # 1. 取得三段路由的路徑幾何資料
                         def get_route_geometry(from_lat, from_lon, to_lat, to_lon, profile):
                             url = f"http://router.project-osrm.org/route/v1/{profile}/{from_lon},{from_lat};{to_lon},{to_lat}?overview=full"
