@@ -12,7 +12,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils import get_station_data, get_realtime_info_batch, get_weather_forecast
 
-st.set_page_config(page_title="YouBike 智慧熱量估計系統", layout="wide")
+st.set_page_config(page_title="Youbike 站點查詢 | YouBike 智慧出行系統", layout="wide")
 
 def init_app():
     # 建立一個佔位容器

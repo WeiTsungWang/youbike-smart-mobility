@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils import get_weather_forecast
 
+st.set_page_config(page_title="天氣預報 | YouBike 智慧出行系統", layout="wide")
+
 st.title("🌤️ 全台各地天氣預報")
 
 # 建立縣市與其中心點經緯度對照表
@@ -62,7 +64,7 @@ if st.button("查詢天氣"):
                 "多雲/陰天": "☁️",
                 "雨天": "🌧️"
             }
-            
+
             display_status = f"{status_emoji.get(status, '🌤️')} {status}"
             st.metric("天氣狀態", display_status)
             
