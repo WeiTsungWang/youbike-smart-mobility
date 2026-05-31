@@ -9,7 +9,7 @@ import os
 import math
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils import get_osrm_distance, get_station_data, find_nearest_station, get_weather_forecast, hide_streamlit_style
+from utils import get_nearest_n_stations, get_osrm_distance, get_realtime_info_batch, get_station_data, get_weather_forecast, hide_streamlit_style
 
 st.set_page_config(page_title="路線規劃 | YouBike 智慧出行系統", layout="wide", initial_sidebar_state="expanded")
 
@@ -26,10 +26,17 @@ if 'current_mode' not in st.session_state:
     st.session_state.current_mode = "步行"
 if 'run_calc' not in st.session_state:
     st.session_state.run_calc = False # 紀錄是否已經按過「計算路徑」
+if "confirmed_start" not in st.session_state:
+    st.session_state.confirmed_start = None
+if "confirmed_end" not in st.session_state:
+    st.session_state.confirmed_end = None
 
 # ==========================================
 # 2. 回呼函式 (Callback)
 # ==========================================
+def trigger_calc():
+    st.session_state.run_calc = True
+
 # 這是解決 Radio 不同步的終極武器，確保在畫面重繪前就改好狀態
 def switch_to_walk():
     st.session_state.current_mode = "步行"
@@ -73,13 +80,15 @@ with col3:
 # 4. 核心邏輯區塊
 # ==========================================
 # 按下按鈕只負責改變狀態，不包攬所有計算邏輯
-if st.button("計算路徑"):
-    st.session_state.run_calc = True
+st.button("計算路徑", on_click=trigger_calc)
 
-# 只要 run_calc 是 True，就維持顯示計算結果
 if st.session_state.run_calc:
-    start_coords = st.session_state.address_map.get(start_addr)
-    end_coords = st.session_state.address_map.get(end_addr)
+    st.session_state.confirmed_start = start_addr
+    st.session_state.confirmed_end = end_addr
+    st.session_state.run_calc = False  # 🔥 重置
+
+    start_coords = st.session_state.address_map.get(st.session_state.confirmed_start)
+    end_coords = st.session_state.address_map.get(st.session_state.confirmed_end)
 
     if not start_addr and not end_addr:
         st.warning("請先輸入起點與終點！")
@@ -103,18 +112,106 @@ if st.session_state.run_calc:
                 prob = weather_data['daily']['precipitation_probability_max'][0]
                 status = "晴天" if weather_data['current']['weather_code'] < 2 else "雨天/多雲"
                 if prob > 50: st.error(f"☔ 降雨機率 {prob}%，建議攜帶雨具。")
-                elif "晴" in status: st.success("☀️ 天氣理想，適合騎乘！")
-                else: st.info("☁️ 天氣尚可，適合短途騎行。")
+                elif "晴" in status: st.success("☀️ 天氣理想，適合出行！")
+                else: st.info("☁️ 天氣尚可，適合短途。")
 
             # YouBike 邏輯：找最近站點
             if st.session_state.current_mode == "YouBike":
                 stations_df = get_station_data()
-                start_node = find_nearest_station(start_lat, start_lon, stations_df)
-                end_node = find_nearest_station(end_lat, end_lon, stations_df)
+
+                candidate_starts = get_nearest_n_stations(
+                                        start_lat,
+                                        start_lon,
+                                        stations_df,
+                                        10
+                                    )
+                station_start_ids = candidate_starts["station_no"].tolist()
+
+                start_realtime = get_realtime_info_batch(station_start_ids)
+                df_rt = pd.DataFrame(start_realtime)
+
+                candidate_starts = candidate_starts.merge(
+                    df_rt,
+                    on="station_no"
+                )
+                candidate_starts = candidate_starts.drop(columns=['lat_x', 'lng_x'])
+                candidate_starts = candidate_starts.rename(columns={'lat_y': 'lat', 'lng_y': 'lng'})
+
+                candidate_starts["distance_score"] = (
+                    1 -
+                    candidate_starts["dist"] /
+                    candidate_starts["dist"].max()
+                )
+
+                candidate_starts["bike_score"] = (
+                    candidate_starts["available_spaces"] /
+                    candidate_starts["available_spaces"].max()
+                )
+
+                candidate_starts["final_score"] = (
+                    0.6 * candidate_starts["bike_score"]
+                    +
+                    0.4 * candidate_starts["distance_score"]
+                )
+
+                best_start = candidate_starts.loc[candidate_starts["final_score"].idxmax()]
+
+                candidate_ends = get_nearest_n_stations(
+                                        end_lat,
+                                        end_lon,
+                                        stations_df,
+                                        10
+                                    )
                 
+                station_end_ids = candidate_ends["station_no"].tolist()
+                end_realtime = get_realtime_info_batch(station_end_ids)
+                df_rt_end = pd.DataFrame(end_realtime)
+                candidate_ends = candidate_ends.merge(  
+                    df_rt_end,
+                    on="station_no"
+                )
+
+                candidate_ends = candidate_ends.drop(columns=['lat_x', 'lng_x'])
+                candidate_ends = candidate_ends.rename(columns={'lat_y': 'lat', 'lng_y': 'lng'})
+
+                candidate_ends["slot_score"] = (
+                    candidate_ends["empty_spaces"] /
+                    candidate_ends["empty_spaces"].max()
+                )
+
+                candidate_ends["distance_score"] = (
+                    1 -
+                    candidate_ends["dist"] /
+                    candidate_ends["dist"].max()
+                )
+
+                candidate_ends["final_score"] = (
+                    0.6 * candidate_ends["slot_score"]
+                    +
+                    0.4 * candidate_ends["distance_score"]
+                )
+
+                best_end = candidate_ends.loc[candidate_ends["final_score"].idxmax()]
+
+                top3_start = candidate_starts.nlargest(
+                                3,
+                                "final_score"
+                            )
+                top3_end = candidate_ends.nlargest(
+                                3,
+                                "final_score"
+                            )
+
+                start_node = best_start
+                end_node = best_end
+
+                # st.write(f"DEBUG: start_node 的類型是 {type(start_node)}, 內容是: {start_node}")
+                # st.write(f"DEBUG: end_node 的類型是 {(end_node)}, 內容是: {end_node}")
+                
+
                 # 更新座標為站點座標
-                s_lat, s_lon = start_node['lat'], start_node['lng']
-                e_lat, e_lon = end_node['lat'], end_node['lng']
+                s_lat, s_lon = float(start_node['lat']), float(start_node['lng'])
+                e_lat, e_lon = float(end_node['lat']), float(end_node['lng'])
 
                 # --- 時間判斷邏輯 ---
                 # 1. 計算純步行時間 (時速 5 km/h)
@@ -122,11 +219,48 @@ if st.session_state.run_calc:
                 walk_only_time = (walk_only_dist / 5) * 60
                 
                 # 2. 計算 YouBike 方案時間 (步行段 5km/h, 騎乘段 12km/h)
-                walk_dist = (get_osrm_distance(start_lat, start_lon, s_lat, s_lon, "foot") + 
-                             get_osrm_distance(e_lat, e_lon, end_lat, end_lon, "foot"))
+                walk_dist1 = get_osrm_distance(start_lat, start_lon, s_lat, s_lon, "foot")
+                walk_dist2 = get_osrm_distance(e_lat, e_lon, end_lat, end_lon, "foot")
+                walk_dist = walk_dist1 + walk_dist2
                 ride_dist = get_osrm_distance(s_lat, s_lon, e_lat, e_lon, "bicycle")
                 
                 yb_time = (walk_dist / 5) * 60 + (ride_dist / 12) * 60
+                st.subheader("🏆 智慧借還站推薦")
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.warning(
+                        f"""
+                        🚲 推薦借車站
+
+                        {best_start['name_tw']}
+
+                        距離： {walk_dist1*1000:.0f} m
+
+                        可借車輛：
+                        {best_start['available_spaces']} 台
+
+                        綜合評分：
+                        {best_start['final_score']*100:.0f}
+                        """
+                    )
+
+                with col2:
+                    st.success(
+                        f"""
+                        🅿️ 推薦還車站
+
+                        {best_end['name_tw']}
+
+                        距離：{walk_dist2*1000:.0f} m
+
+                        可還空位：
+                        {best_end['empty_spaces']} 格
+
+                        綜合評分：
+                        {best_end['final_score']*100:.0f}
+                        """
+                    )
 
                 if yb_time > walk_only_time:
                     st.warning(f"💡 建議直接步行：步行約 {int(walk_only_time)} 分鐘！")
@@ -136,7 +270,7 @@ if st.session_state.run_calc:
                     # 這是最關鍵的修正：利用 on_click 觸發狀態改變！
                     col_a.button("切換至步行模式", on_click=switch_to_walk)
                                     
-                st.write(f"🚗 幫您導航至最近站點：\n起點({start_addr})\n -> 借車點({start_node['name_tw']})\n -> 終點({end_node['name_tw']})\n -> 終點({end_addr})")
+                st.write(f"🚗 幫您導航推薦路線：起點({start_addr}) -> 借車點({start_node['name_tw']}) -> 還車點({end_node['name_tw']}) -> 終點({end_addr})")
             else:
                 s_lat, s_lon = start_lat, start_lon
                 e_lat, e_lon = end_lat, end_lon
@@ -157,8 +291,9 @@ if st.session_state.run_calc:
                     
                     if st.session_state.current_mode == "YouBike":
                         # 計算步行段 (起點->借車站, 還車站->終點)
-                        walk_dist_km = (get_osrm_distance(start_lat, start_lon, s_lat, s_lon, "foot") + 
-                                        get_osrm_distance(e_lat, e_lon, end_lat, end_lon, "foot"))
+                        walk_dist_km1 = get_osrm_distance(start_lat, start_lon, s_lat, s_lon, "foot")
+                        walk_dist_km2 = get_osrm_distance(e_lat, e_lon, end_lat, end_lon, "foot")
+                        walk_dist_km = walk_dist_km1 + walk_dist_km2
                         
                         # 計算騎乘段 (借車站->還車站)
                         ride_dist_km = get_osrm_distance(s_lat, s_lon, e_lat, e_lon, "bicycle")
@@ -242,6 +377,9 @@ if st.session_state.run_calc:
                         bike_data = [[p[1], p[0]] for p in bike_path]
                         walk_data2 = [[p[1], p[0]] for p in walk_path2]
 
+                        # st.write(builtins.type(s_lon))
+                        # st.write(builtins.type(s_lat))
+
                         # 3. 繪製圖層
                         layers.append(pdk.Layer(
                             "PathLayer",
@@ -273,10 +411,10 @@ if st.session_state.run_calc:
                         layers.append(pdk.Layer(
                             "ScatterplotLayer",
                             data=[
-                                {"name": f"起點: {start_addr}", "pos": [start_lon, start_lat], "color": [0, 255, 0]},
-                                {"name": f"借車站: {start_node['name_tw']}", "pos": [s_lon, s_lat], "color": [255, 255, 0]},
-                                {"name": f"還車站: {end_node['name_tw']}", "pos": [e_lon, e_lat], "color": [255, 165, 0]},
-                                {"name": f"終點: {end_addr}", "pos": [end_lon, end_lat], "color": [0, 0, 255]}
+                                {"name": f"起點: {start_addr}", "pos": [start_lon, start_lat], "color": [255, 165, 0]},
+                                {"name": f"借車站: {start_node['name_tw']}\n距離: {walk_dist_km1*1000:.0f} m\n可借: {start_node['available_spaces']}", "pos": [s_lon, s_lat], "color": [255, 255, 0]},
+                                {"name": f"還車站: {end_node['name_tw']}\n距離: {walk_dist_km2*1000:.0f} m\n可還: {end_node['empty_spaces']}", "pos": [e_lon, e_lat], "color": [0, 255, 0]},
+                                {"name": f"終點: {end_addr}", "pos": [end_lon, end_lat], "color": [150, 0, 150]}
                             ],
                             get_position="pos",
                             get_color="color",
@@ -288,8 +426,8 @@ if st.session_state.run_calc:
                         layers.append(pdk.Layer(
                             "ScatterplotLayer",
                             data=[
-                                {"name": f"起點: {start_addr}", "pos": [start_lon, start_lat], "color": [0, 255, 0]},
-                                {"name": f"終點: {end_addr}", "pos": [end_lon, end_lat], "color": [0, 0, 255]}
+                                {"name": f"起點: {start_addr}", "pos": [start_lon, start_lat], "color": [255, 165, 0]},
+                                {"name": f"終點: {end_addr}", "pos": [end_lon, end_lat], "color": [150, 0, 150]}
                             ],
                             get_position="pos",
                             get_color="color",
@@ -315,10 +453,68 @@ if st.session_state.run_calc:
                         layers=layers,
                         tooltip={"text": "{name}"}
                     ))
+
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        st.subheader("🚲 借車站 Top3")
+
+                        start_dist = []
+
+                        for i in range(len(top3_start)):
+                            dist = get_osrm_distance(
+                                start_lat, 
+                                start_lon, 
+                                top3_start.iloc[i]['lat'], 
+                                top3_start.iloc[i]['lng'], 
+                                "foot"
+                            )
+                            start_dist.append(dist)
+
+                        start_data = pd.DataFrame({
+                            "站點名稱": top3_start["name_tw"],
+                            "距離(m)": [dist * 1000 for dist in start_dist],
+                            "可借車輛": top3_start["available_spaces"],
+                            "綜合評分": top3_start["final_score"]*100
+                        })
+
+                        st.dataframe(
+                            start_data,
+                            use_container_width=True, 
+                            hide_index=True
+                        )
+                    with col2:
+                        st.subheader("🅿️ 還車站 Top3")
+
+                        end_dist = []
+
+                        for i in range(len(top3_end)):
+                            dist = get_osrm_distance(
+                                end_lat, 
+                                end_lon, 
+                                top3_end.iloc[i]['lat'], 
+                                top3_end.iloc[i]['lng'], 
+                                "foot"
+                            )
+                            end_dist.append(dist)
+
+                        end_data = pd.DataFrame({
+                            "站點名稱": top3_end["name_tw"],
+                            "距離(m)": [dist * 1000 for dist in end_dist],
+                            "可還空位": top3_end["empty_spaces"],
+                            "綜合評分": top3_end["final_score"]*100
+                        })
+
+                        st.dataframe(
+                            end_data,
+                            use_container_width=True, 
+                            hide_index=True
+                        )
+
                     
                 else:
                     st.error("無法計算路徑。")
             except Exception as e:
                 st.error(f"路徑繪製失敗: {e}")
 else:
-    st.info("請先選擇起點與終點以進行計算。")
+    st.info("請先選擇起點與終點後按下「計算路徑」按鈕以進行計算。")

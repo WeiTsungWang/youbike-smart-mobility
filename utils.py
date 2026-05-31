@@ -55,10 +55,6 @@ def get_osrm_distance(lat1, lon1, lat2, lon2, profile):
     res = requests.get(url).json()
     return res['routes'][0]['distance'] / 1000 # 回傳 km
 
-def find_nearest_station(lat, lon, df):
-    df['dist'] = ((df['lat'] - lat)**2 + (df['lng'] - lon)**2)
-    return df.loc[df['dist'].idxmin()]
-
 def hide_streamlit_style():
     hide_streamlit_style = """
             <style>
@@ -71,3 +67,13 @@ def hide_streamlit_style():
             </style>
             """
     return hide_streamlit_style
+
+def get_nearest_n_stations(lat, lon, df, n=10):
+    df = df.copy()
+
+    df["dist"] = (
+        (df["lat"] - lat)**2 +
+        (df["lng"] - lon)**2
+    )
+
+    return df.nsmallest(n, "dist")
