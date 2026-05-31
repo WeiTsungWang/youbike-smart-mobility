@@ -1,7 +1,6 @@
 import pandas as pd
 import sqlite3
 import requests
-from urllib.parse import quote
 
 def get_station_data():
     conn = sqlite3.connect('stations.db')
@@ -59,3 +58,13 @@ def get_osrm_distance(lat1, lon1, lat2, lon2, profile):
 def find_nearest_station(lat, lon, df):
     df['dist'] = ((df['lat'] - lat)**2 + (df['lng'] - lon)**2)
     return df.loc[df['dist'].idxmin()]
+
+def hide_streamlit_style():
+    hide_streamlit_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            [data-testid="stHeader"] {display:none;}
+            </style>
+            """
+    return hide_streamlit_style

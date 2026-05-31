@@ -10,9 +10,11 @@ import time
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils import get_station_data, get_realtime_info_batch, get_weather_forecast
+from utils import get_station_data, get_realtime_info_batch, get_weather_forecast, hide_streamlit_style
 
-st.set_page_config(page_title="Youbike 站點查詢 | YouBike 智慧出行系統", layout="wide")
+st.set_page_config(page_title="Youbike 站點查詢 | YouBike 智慧出行系統", layout="wide", initial_sidebar_state="expanded")
+    
+st.markdown(hide_streamlit_style(), unsafe_allow_html=True)
 
 def init_app():
     # 建立一個佔位容器

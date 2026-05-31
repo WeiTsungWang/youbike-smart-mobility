@@ -9,9 +9,11 @@ import os
 import math
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils import get_osrm_distance, get_station_data, find_nearest_station, get_weather_forecast
+from utils import get_osrm_distance, get_station_data, find_nearest_station, get_weather_forecast, hide_streamlit_style
 
-st.set_page_config(page_title="路線規劃 | YouBike 智慧出行系統", layout="wide")
+st.set_page_config(page_title="路線規劃 | YouBike 智慧出行系統", layout="wide", initial_sidebar_state="expanded")
+
+st.markdown(hide_streamlit_style(), unsafe_allow_html=True)
 
 st.title("🚲 路線規劃與熱量估算")
 
@@ -33,7 +35,7 @@ def switch_to_walk():
     st.session_state.current_mode = "步行"
 
 def search_address(searchterm: str):
-    if not searchterm or len(searchterm) < 3:
+    if not searchterm or len(searchterm) < 2:
         return []
     
     url = f"https://nominatim.openstreetmap.org/search?q={searchterm}&format=json&limit=5&countrycodes=tw"

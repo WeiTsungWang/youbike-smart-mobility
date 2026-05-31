@@ -2,13 +2,15 @@ import pandas as pd
 import streamlit as st
 import sys
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # 加入根目錄以匯入 utils
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils import get_weather_forecast
+from utils import get_weather_forecast, hide_streamlit_style
 
 st.set_page_config(page_title="天氣預報 | YouBike 智慧出行系統", layout="wide")
+
+st.markdown(hide_streamlit_style(), unsafe_allow_html=True)
 
 st.title("🌤️ 全台各地天氣預報")
 
