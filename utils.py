@@ -43,7 +43,7 @@ def get_realtime_info_batch(station_nos):
 
 def get_weather_forecast(lat, lon):
     # 請確認 URL 包含 weather_code
-    url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia/Taipei&forecast_days=7"
+    url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&hourly=temperature_2m,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia/Taipei&forecast_days=7"
     try:
         response = requests.get(url, timeout=5).json()
         return response
@@ -65,6 +65,9 @@ def hide_streamlit_style():
             #MainMenu {visibility: hidden;}
             footer {visibility: hidden;}
             [data-testid="stHeader"] {display:none;}
+            [data-testid="stSidebarCollapseButton"] {
+                display:none;
+            }
             </style>
             """
     return hide_streamlit_style

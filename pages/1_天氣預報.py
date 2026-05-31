@@ -3,6 +3,7 @@ import streamlit as st
 import sys
 import os
 from datetime import datetime
+import altair as alt
 
 # 加入根目錄以匯入 utils
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -40,11 +41,21 @@ if st.button("查詢天氣"):
         
         if data:
             curr = data['current']
+
+            now = datetime.now()
+            hourly = data["hourly"]
+
+            current_hour = now.strftime("%Y-%m-%dT%H:00")
+
+            try:
+                idx = hourly["time"].index(current_hour)
+            except ValueError:
+                idx = 0
             
-            prob = data['daily']['precipitation_probability_max'][0]
+            prob = data['hourly']['precipitation_probability'][idx]
 
             # 1. 頂部摘要 (只顯示關鍵指標，避開溫度重複)
-            st.subheader(f"{selected_city} 今日天氣")
+            st.subheader(f"{selected_city} 即時天氣")
             col1, col2, col3, col4 = st.columns(4)
             col1.metric("即時溫度", f"{curr['temperature_2m']}°C")
             col2.metric("濕度", f"{curr['relative_humidity_2m']}%")
@@ -52,10 +63,8 @@ if st.button("查詢天氣"):
             col4.metric("風速", f"{curr['wind_speed_10m']} km/h")
             # 這裡我們利用 weather_code 簡單轉譯狀態
             w_code = curr['weather_code']
-            # --- 優先級判斷 ---
-            if prob >= 50:
-                status = "雨天" # 強制覆寫
-            elif w_code == 0:
+            
+            if w_code == 0:
                 status = "晴天"
             elif w_code <= 3:
                 status = "多雲/陰天"
@@ -73,11 +82,34 @@ if st.button("查詢天氣"):
             # 2. 動態建議 (邏輯改為從 data 中讀取降雨機率)
             prob = data['daily']['precipitation_probability_max'][0] # 當日預報機率
             if prob > 50:
-                st.error("☔ 降雨機率高，建議攜帶雨具。")
+                st.error(f"☔ 本日最高降雨機率 {prob}%，建議攜帶雨具。")
             elif "晴" in status:
                 st.success("☀️ 天氣理想，適合騎乘 YouBike！")
             else:
                 st.info("☁️ 天氣尚可，適合短途騎行。")
+
+            st.subheader("🕒 未來 12 小時預報")
+
+            df_hourly = pd.DataFrame({
+                "時間": [
+                    t[11:16]
+                    for t in hourly["time"][idx:idx+12]
+                ],
+                "溫度(°C)": hourly["temperature_2m"][idx:idx+12],
+                "降雨機率(%)": hourly["precipitation_probability"][idx:idx+12]
+            })
+
+            chart = alt.Chart(df_hourly).mark_line(point=True).encode(
+                x=alt.X(
+                "時間",
+                axis=alt.Axis(labelAngle=0)
+            ),
+                y=alt.Y("溫度(°C)", title=["溫", "度", "(°C)"], sort='-x', axis=alt.Axis(labelLimit=300, titleAngle=0))
+            ).properties(
+                height=300
+            )
+
+            st.altair_chart(chart, use_container_width=True)
 
             # 一週預報 (表格化)
             st.subheader("🗓️ 一週天氣預報")
