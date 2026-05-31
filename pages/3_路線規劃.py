@@ -30,6 +30,8 @@ if "confirmed_start" not in st.session_state:
     st.session_state.confirmed_start = None
 if "confirmed_end" not in st.session_state:
     st.session_state.confirmed_end = None
+if "zoom" in st.session_state:
+    zoom_level = st.session_state["zoom"]
 
 # ==========================================
 # 2. 回呼函式 (Callback)
@@ -346,20 +348,44 @@ if st.session_state.run_calc:
                     min_lat, max_lat = df_route['lat'].min(), df_route['lat'].max()
                     min_lon, max_lon = df_route['lon'].min(), df_route['lon'].max()
 
-                    # 2. 自動計算 Zoom
-                    # 邏輯：經度差值 (delta_lon) 越大，zoom 需要越小
-                    delta_lat = max_lat - min_lat
-                    delta_lon = max_lon - min_lon
-                    max_delta = max(delta_lat, delta_lon)
-                    padding = 0.02 # 這個 padding 確保起終點不會剛好卡在畫面邊緣
-                    search_radius = max_delta + padding
+                    # 🔥 改良點 1：確保 YouBike 模式下的「原始起終點」也被包覆在視角內
+                    if st.session_state.current_mode == "YouBike":
+                        min_lat = min(min_lat, start_lat, end_lat, s_lat, e_lat)
+                        max_lat = max(max_lat, start_lat, end_lat, s_lat, e_lat)
+                        min_lon = min(min_lon, start_lon, end_lon, s_lon, e_lon)
+                        max_lon = max(max_lon, start_lon, end_lon, s_lon, e_lon)
 
-                    zoom_level = 13.0 - math.log10(search_radius + 0.001)
+                    # # 2. 自動計算 Zoom (改良版算法)
+                    # max_delta = max(max_lat - min_lat, max_lon - min_lon)
+                    # # 透過對數計算合適的縮放比例，並限制在 11~16 之間，避免單點過度放大或跨縣市過度縮小
+                    # zoom_level = 11.5 - math.log2(max_delta / 0.1) if max_delta > 0 else 15
+                    # zoom_level = max(11, min(16, zoom_level)) 
+
+                    # --- 這裡計算所有的座標點，包含起終點與路徑 ---
+                    # 確保這些點都存在
+                    all_lats = df_route['lat'].tolist() + [start_lat, end_lat]
+                    all_lons = df_route['lon'].tolist() + [start_lon, end_lon]
+
+                    # 計算中心點與極值
+                    mid_lat = (max(all_lats) + min(all_lats)) / 2
+                    mid_lon = (max(all_lons) + min(all_lons)) / 2
+
+                    # 動態計算 Zoom (參考之前的 get_dynamic_zoom)
+                    max_delta = max(max(all_lats) - min(all_lats), max(all_lons) - min(all_lons))
+                    zoom_level = 11.5 - math.log2(max_delta / 0.1) if max_delta > 0 else 13
+
+                    # 🔥 關鍵：建立一個 ViewState 物件
+                    view_state = pdk.ViewState(
+                        latitude=mid_lat,
+                        longitude=mid_lon,
+                        zoom=zoom_level,
+                        pitch=0,
+                        bearing=0
+                    )
 
                     layers = []
 
                     if st.session_state.current_mode == "YouBike":
-                        # 1. 取得三段路由的路徑幾何資料
                         def get_route_geometry(from_lat, from_lon, to_lat, to_lon, profile):
                             url = f"http://router.project-osrm.org/route/v1/{profile}/{from_lon},{from_lat};{to_lon},{to_lat}?overview=full"
                             res = requests.get(url).json()
@@ -371,22 +397,19 @@ if st.session_state.run_calc:
                         bike_path = get_route_geometry(s_lat, s_lon, e_lat, e_lon, "bicycle")
                         walk_path2 = get_route_geometry(e_lat, e_lon, end_lat, end_lon, "foot")
 
-                        # 2. 將路徑資料轉換為 PyDeck 需要的格式
-                        # 注意：OSRM 回傳的是 (lat, lon)，PyDeck 需要 [lon, lat]
                         walk_data1 = [[p[1], p[0]] for p in walk_path1]
                         bike_data = [[p[1], p[0]] for p in bike_path]
                         walk_data2 = [[p[1], p[0]] for p in walk_path2]
 
-                        # st.write(builtins.type(s_lon))
-                        # st.write(builtins.type(s_lat))
-
-                        # 3. 繪製圖層
+                        # 🔥 改良點 2：加入 width_min_pixels 與 width_max_pixels
                         layers.append(pdk.Layer(
                             "PathLayer",
                             data=[{"path": walk_data1, "name": "步行路段"}],
                             get_path="path",
                             get_color=[0, 255, 255, 200],
-                            get_width=8,
+                            get_width=5,          # 真實世界寬度 (公尺)
+                            width_min_pixels=3,   # 縮到最小時，依然保有 3 像素寬度
+                            width_max_pixels=8,   # 放到最大時，不超過 8 像素寬度
                             get_dash_array=[10, 5],
                             pickable=True,
                         ))
@@ -395,7 +418,9 @@ if st.session_state.run_calc:
                             data=[{"path": walk_data2, "name": "步行路段"}],
                             get_path="path",
                             get_color=[0, 255, 255, 200],
-                            get_width=8,
+                            get_width=5,
+                            width_min_pixels=3,
+                            width_max_pixels=8,
                             get_dash_array=[10, 5],
                             pickable=True,
                         ))
@@ -404,10 +429,13 @@ if st.session_state.run_calc:
                             data=[{"path": bike_data, "name": "YouBike騎乘路段"}],
                             get_path="path",
                             get_color=[255, 69, 0, 200],
-                            get_width=8,
+                            get_width=5,
+                            width_min_pixels=4,
+                            width_max_pixels=12,
                             pickable=True,
                         ))
-                        # YouBike 模式：顯示起終點 + 借還站點
+                        
+                        # 🔥 改良點 3：加入 radius_min_pixels 與 radius_max_pixels
                         layers.append(pdk.Layer(
                             "ScatterplotLayer",
                             data=[
@@ -418,11 +446,12 @@ if st.session_state.run_calc:
                             ],
                             get_position="pos",
                             get_color="color",
-                            get_radius=50,
+                            get_radius=50,          # 真實世界半徑 (公尺)
+                            radius_min_pixels=8,    # 縮小地圖時，點不會消失
+                            radius_max_pixels=30,   # 放心地圖時，點不會蓋住整個螢幕
                             pickable=True,
                         ))
                     else:
-                        # 步行/自行車模式：只顯示起終點
                         layers.append(pdk.Layer(
                             "ScatterplotLayer",
                             data=[
@@ -432,6 +461,8 @@ if st.session_state.run_calc:
                             get_position="pos",
                             get_color="color",
                             get_radius=50,
+                            radius_min_pixels=8,
+                            radius_max_pixels=30,
                             pickable=True,
                         ))
                         layers.append(pdk.Layer(
@@ -439,77 +470,92 @@ if st.session_state.run_calc:
                             data=[{"path": path_data, "name": "路線"}],
                             get_path="path",
                             get_color=[255, 69, 0, 200],
-                            get_width=8,
+                            get_width=5,
+                            width_min_pixels=4,
+                            width_max_pixels=12,
                             pickable=True,
                         ))
 
-                    st.pydeck_chart(pdk.Deck(
-                        initial_view_state=pdk.ViewState(
-                            latitude=(min_lat + max_lat) / 2,
-                            longitude=(min_lon + max_lon) / 2,
-                            zoom=zoom_level,
-                            pitch=0
+                    # st.pydeck_chart(
+                    #     pdk.Deck(
+                    #         initial_view_state=pdk.ViewState(
+                    #             latitude=(min_lat + max_lat) / 2,
+                    #             longitude=(min_lon + max_lon) / 2,
+                    #             zoom=zoom_level,
+                    #             pitch=0
+                    #         ),
+                    #         layers=layers,
+                    #         tooltip={"text": "{name}"}
+                    #     ),
+                    #     use_container_width=True
+                    # )
+
+                    st.pydeck_chart(
+                        pdk.Deck(
+                            initial_view_state=view_state,
+                            layers=layers,
+                            tooltip={"text": "{name}"}
                         ),
-                        layers=layers,
-                        tooltip={"text": "{name}"}
-                    ))
+                        use_container_width=True
+                    )
 
-                    col1, col2 = st.columns(2)
+                    if st.session_state.current_mode == "YouBike":
+                        col1, col2 = st.columns(2)
 
-                    with col1:
-                        st.subheader("🚲 借車站 Top3")
+                        with col1:
+                            st.subheader("🚲 借車站 Top3")
 
-                        start_dist = []
+                            start_dist = []
 
-                        for i in range(len(top3_start)):
-                            dist = get_osrm_distance(
-                                start_lat, 
-                                start_lon, 
-                                top3_start.iloc[i]['lat'], 
-                                top3_start.iloc[i]['lng'], 
-                                "foot"
+                            for i in range(len(top3_start)):
+                                dist = get_osrm_distance(
+                                    start_lat, 
+                                    start_lon, 
+                                    top3_start.iloc[i]['lat'], 
+                                    top3_start.iloc[i]['lng'], 
+                                    "foot"
+                                )
+                                start_dist.append(dist)
+
+                            start_data = pd.DataFrame({
+                                "站點名稱": top3_start["name_tw"],
+                                "距離(m)": [dist * 1000 for dist in start_dist],
+                                "可借車輛": top3_start["available_spaces"],
+                                "綜合評分": [f"{score*100:.2f}" for score in top3_start["final_score"]]
+                            })
+
+                            st.dataframe(
+                                start_data,
+                                use_container_width=True, 
+                                hide_index=True
                             )
-                            start_dist.append(dist)
+                        with col2:
+                            st.subheader("🅿️ 還車站 Top3")
 
-                        start_data = pd.DataFrame({
-                            "站點名稱": top3_start["name_tw"],
-                            "距離(m)": [dist * 1000 for dist in start_dist],
-                            "可借車輛": top3_start["available_spaces"],
-                            "綜合評分": top3_start["final_score"]*100
-                        })
+                            end_dist = []
 
-                        st.dataframe(
-                            start_data,
-                            use_container_width=True, 
-                            hide_index=True
-                        )
-                    with col2:
-                        st.subheader("🅿️ 還車站 Top3")
+                            for i in range(len(top3_end)):
+                                dist = get_osrm_distance(
+                                    end_lat, 
+                                    end_lon, 
+                                    top3_end.iloc[i]['lat'], 
+                                    top3_end.iloc[i]['lng'], 
+                                    "foot"
+                                )
+                                end_dist.append(dist)
 
-                        end_dist = []
+                            end_data = pd.DataFrame({
+                                "站點名稱": top3_end["name_tw"],
+                                "距離(m)": [dist * 1000 for dist in end_dist],
+                                "可還空位": top3_end["empty_spaces"],
+                                "綜合評分": [f"{score*100:.2f}" for score in top3_end["final_score"]]
+                            })
 
-                        for i in range(len(top3_end)):
-                            dist = get_osrm_distance(
-                                end_lat, 
-                                end_lon, 
-                                top3_end.iloc[i]['lat'], 
-                                top3_end.iloc[i]['lng'], 
-                                "foot"
+                            st.dataframe(
+                                end_data,
+                                use_container_width=True, 
+                                hide_index=True
                             )
-                            end_dist.append(dist)
-
-                        end_data = pd.DataFrame({
-                            "站點名稱": top3_end["name_tw"],
-                            "距離(m)": [dist * 1000 for dist in end_dist],
-                            "可還空位": top3_end["empty_spaces"],
-                            "綜合評分": top3_end["final_score"]*100
-                        })
-
-                        st.dataframe(
-                            end_data,
-                            use_container_width=True, 
-                            hide_index=True
-                        )
 
                     
                 else:
