@@ -1,8 +1,39 @@
+import streamlit as st
+import os
+import subprocess
+import time
 import math
-
 import pandas as pd
 import sqlite3
 import requests
+
+def init_app():
+    # 建立一個佔位容器
+    placeholder = st.empty()
+    
+    if not os.path.exists('stations.db'):
+        # 顯示初始化訊息
+        with placeholder.container():
+            st.info("偵測到尚未建立站點資料庫，正在執行初始化...")
+            
+        try:
+            # 執行爬蟲
+            subprocess.run(["python", "data_collector.py"], check=True)
+            
+            # 將內容替換為成功訊息
+            with placeholder.container():
+                st.success("初始化完成！")
+            
+            # 暫停 2 秒讓使用者看到成功訊息
+            time.sleep(2)
+            
+        except subprocess.CalledProcessError as e:
+            with placeholder.container():
+                st.error(f"初始化失敗: {e}")
+            time.sleep(2)
+    
+    # 清空容器，這會讓「初始化完成」的字樣消失
+    placeholder.empty()
 
 def get_station_data():
     conn = sqlite3.connect('stations.db')
@@ -56,19 +87,6 @@ def get_osrm_distance(lat1, lon1, lat2, lon2, profile):
     url = f"http://router.project-osrm.org/route/v1/{profile}/{lon1},{lat1};{lon2},{lat2}"
     res = requests.get(url).json()
     return res['routes'][0]['distance'] / 1000 # 回傳 km
-
-def hide_streamlit_style():
-    hide_streamlit_style = """
-            <style>
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            [data-testid="stHeader"] {display:none;}
-            [data-testid="stSidebarCollapseButton"] {
-                display:none;
-            }
-            </style>
-            """
-    return hide_streamlit_style
 
 def get_nearest_n_stations(lat, lon, df, n=10):
     df = df.copy()

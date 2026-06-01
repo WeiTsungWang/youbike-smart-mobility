@@ -10,44 +10,13 @@ import time
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils import get_station_data, get_realtime_info_batch, get_weather_forecast, hide_streamlit_style
+from utils import init_app, get_station_data, get_realtime_info_batch, get_weather_forecast
 
 st.set_page_config(page_title="Youbike 站點查詢 | YouBike 智慧出行系統", layout="wide", initial_sidebar_state="expanded")
-    
-st.markdown(hide_streamlit_style(), unsafe_allow_html=True)
-
-def init_app():
-    # 建立一個佔位容器
-    placeholder = st.empty()
-    
-    if not os.path.exists('stations.db'):
-        # 顯示初始化訊息
-        with placeholder.container():
-            st.info("偵測到尚未建立站點資料庫，正在執行初始化...")
-            
-        try:
-            # 執行爬蟲
-            subprocess.run(["python", "data_collector.py"], check=True)
-            
-            # 將內容替換為成功訊息
-            with placeholder.container():
-                st.success("初始化完成！")
-            
-            # 暫停 2 秒讓使用者看到成功訊息
-            time.sleep(2)
-            
-        except subprocess.CalledProcessError as e:
-            with placeholder.container():
-                st.error(f"初始化失敗: {e}")
-            time.sleep(2)
-    
-    # 清空容器，這會讓「初始化完成」的字樣消失
-    placeholder.empty()
+st.title("🚲 全台 YouBike 2.0 即時查詢系統")
 
 # 在頁面載入時執行一次
 init_app()
-
-st.title("🚲 全台 YouBike 2.0 即時查詢系統")
 
 CITY_MAP = {
     "01": "臺北市", "02": "新北市", "03": "桃園市", "05": "新竹縣",

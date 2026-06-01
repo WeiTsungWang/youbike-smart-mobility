@@ -9,11 +9,9 @@ import os
 import math
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils import get_nearest_n_stations, get_osrm_distance, get_realtime_info_batch, get_station_data, get_weather_forecast, hide_streamlit_style
+from utils import init_app, get_nearest_n_stations, get_osrm_distance, get_realtime_info_batch, get_station_data, get_weather_forecast
 
 st.set_page_config(page_title="路線規劃 | YouBike 智慧出行系統", layout="wide", initial_sidebar_state="expanded")
-
-st.markdown(hide_streamlit_style(), unsafe_allow_html=True)
 
 st.title("🚲 路線規劃與熱量估算")
 
@@ -32,6 +30,8 @@ if "confirmed_end" not in st.session_state:
     st.session_state.confirmed_end = None
 if "zoom" in st.session_state:
     zoom_level = st.session_state["zoom"]
+
+init_app()
 
 # ==========================================
 # 2. 回呼函式 (Callback)
