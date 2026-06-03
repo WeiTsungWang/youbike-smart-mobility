@@ -97,15 +97,28 @@ if st.button("查詢天氣"):
                 "降雨機率(%)": hourly["precipitation_probability"][idx:idx+12]
             })
 
-            chart = alt.Chart(df_hourly).mark_line(point=True).encode(
-                x=alt.X(
-                "時間",
-                axis=alt.Axis(labelAngle=0)
-            ),
-                y=alt.Y("溫度(°C)", title=["溫", "度", "(°C)"], sort='-x', axis=alt.Axis(labelLimit=300, titleAngle=0))
-            ).properties(
-                height=300
+            # 1. 繪製溫度線
+            line_temp = alt.Chart(df_hourly).mark_line(point=True, color='#FF9999').encode(
+                x=alt.X("時間", axis=alt.Axis(labelAngle=0)),
+                y=alt.Y("溫度(°C)", title=["溫", "度", "(°C)"], sort='-x', axis=alt.Axis(titleColor='#FF9999', titleAngle=0, orient='left')),
+                tooltip=[
+                    alt.Tooltip("時間", title="時間"),
+                    alt.Tooltip("溫度(°C)", title="溫度 (°C)")
+                ]
             )
+
+            # 2. 繪製降雨機率長條 (Bar Chart)
+            bar_rain = alt.Chart(df_hourly).mark_bar(opacity=0.3, color='#76C8FF').encode(
+                x=alt.X("時間"),
+                y=alt.Y("降雨機率(%)", title=["降", "雨", "機","率", "(%)"], scale=alt.Scale(domain=[0, 100]), axis=alt.Axis(titleColor='#76C8FF', titleAngle=0, orient='right')),
+                tooltip=[
+                    alt.Tooltip("時間", title="時間"),
+                    alt.Tooltip("降雨機率(%)", title="降雨機率 (%)")
+                ]
+            )
+
+            # 3. 合併圖表 (layer)
+            chart = alt.layer(line_temp, bar_rain).resolve_scale(y='independent').properties(height=300)
 
             st.altair_chart(chart, use_container_width=True)
 
