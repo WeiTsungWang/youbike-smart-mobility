@@ -2,7 +2,7 @@
 
 這是一套基於 Python 與 Streamlit 開發的 YouBike 2.0 即時查詢與路線規劃系統。旨在解決跨縣市 YouBike 騎乘時，因資訊破碎導致的「借還車困難」與「路徑規劃不精準」痛點。
 
-系統整合了 OpenStreetMap 地理資訊、Open-Meteo 天氣預報以及 OSRM 路徑規劃引擎，為使用者提供高效、直觀的 YouBike 出行決策支援。
+系統整合了 YouBike 2.0 站點即時資訊、OpenStreetMap 地理資訊、Open-Meteo 天氣預報以及 OSRM 路徑規劃引擎，為使用者提供高效、直觀的 YouBike 出行決策支援。
 
 ## 💻 專案結構 (Project Structure)
 
@@ -47,7 +47,7 @@
 * **資料分析 (Data Analysis)**: Pandas, Altair
 
 ## 🛠 安裝與執行
-本專案建議在 [Anaconda](https://www.anaconda.com/download) 環境下執行。
+本專案建議在 [Anaconda](https://www.anaconda.com/download) 中建立的 Python 3.10+ 虛擬環境下執行。
 
 ### 1. 開啟終端機
 
