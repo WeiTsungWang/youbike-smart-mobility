@@ -104,7 +104,8 @@ streamlit run app.py
 
 使用瀏覽器訪問網址即可開始使用：
 
-![系統首頁預覽](image.png)
+<img width="1920" height="1030" alt="image" src="https://github.com/user-attachments/assets/bdf6450c-0394-48a7-8f60-2f64dd824ded" />
+
 ---
 
 
