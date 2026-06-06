@@ -32,7 +32,7 @@ def init_app():
                 st.error(f"初始化失敗: {e}")
             time.sleep(2)
     
-    # 清空容器，這會讓「初始化完成」的字樣消失
+    # 清空容器，讓「初始化完成」的字樣消失
     placeholder.empty()
 
 def get_station_data():
@@ -44,7 +44,7 @@ def get_station_data():
     return df
 
 def get_realtime_info_batch(station_nos):
-    """改為 POST 請求，符合 API 規範"""
+    """使用 POST 請求，符合 API 規範"""
     url = "https://apis.youbike.com.tw/tw2/parkingInfo"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -75,7 +75,6 @@ def get_realtime_info_batch(station_nos):
     return all_data
 
 def get_weather_forecast(lat, lon):
-    # 請確認 URL 包含 weather_code
     url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&hourly=temperature_2m,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia/Taipei&forecast_days=7"
     try:
         response = requests.get(url, timeout=5).json()

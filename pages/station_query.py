@@ -3,10 +3,8 @@ import streamlit as st
 import pandas as pd
 import pydeck as pdk
 import altair as alt
-import subprocess
 import sys
 import os
-import time
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -80,7 +78,7 @@ if query_btn:
         avg_lon = target_stations['lng'].mean()
 
         with st.spinner('正在查詢即時資訊與天氣...'):
-            # 取得天氣 (這裡重複利用你 utils 中的 get_weather_forecast)
+            # 取得天氣
             weather_data = get_weather_forecast(avg_lat, avg_lon)
             
             if weather_data:
@@ -92,7 +90,7 @@ if query_btn:
                 status = "晴天" if w_code < 2 else "陰天/多雲"
                 if 50 <= w_code <= 67: status = "雨天"
                 
-                # 顯示天氣建議 (這就是你要的顯示區塊)
+                # 顯示天氣建議
                 st.subheader(f"📍 {selected_city + ' ' + selected_dist if search_mode == '依地區搜尋' else '該區域'} 天氣建議")
                 if prob > 50:
                     st.error(f"☔ 降雨機率 {prob}%，建議攜帶雨具。")
@@ -110,19 +108,16 @@ if query_btn:
             if realtime_data:
                 df_api = pd.DataFrame(realtime_data)
                 df = pd.merge(df_api, target_stations, on='station_no', how='inner')
-                # 在 merge 之後加上這段清理邏輯
+                # 在 merge 之後加上清理邏輯
                 df = df.drop(columns=['lat_x', 'lng_x'])
-                # 並將 lat_y, lng_y 重新命名為 lat, lng，這樣你原本的程式碼就不用再改 _y 了
+                # 將 lat_y, lng_y 重新命名為 lat, lng
                 df = df.rename(columns={'lat_y': 'lat', 'lng_y': 'lng'})
-                # st.write("目前表格的欄位:", df.columns.tolist())
                 
-                # 地圖顯示
-                # 地圖顯示修正版：直接從 target_stations 獲取經緯度，確保不依賴 API 回傳的欄位
+                # 地圖顯示：直接從 target_stations 獲取經緯度，確保不依賴 API 回傳的欄位
                 # 1. 確保經緯度已經是 float 型態 (在 merge 之後執行)
                 df['lat'] = df['lat'].astype(float)
                 df['lng'] = df['lng'].astype(float)
 
-                # --- 在 st.pydeck_chart 之前插入此段 ---
                 # 1. 計算經緯度範圍 (Bounding Box)
                 lat_range = df['lat'].max() - df['lat'].min()
                 lon_range = df['lng'].max() - df['lng'].min()
