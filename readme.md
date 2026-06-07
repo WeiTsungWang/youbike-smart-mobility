@@ -4,6 +4,8 @@
 
 系統整合了 YouBike 2.0 站點即時資訊、OpenStreetMap 地理資訊、Open-Meteo 天氣預報以及 OSRM 路徑規劃引擎，為使用者提供高效、直觀的 YouBike 出行決策支援。
 
+[Demo 影片](https://youtu.be/qtW6-yLk6LE)
+
 ## 💻 專案結構 (Project Structure)
 
 ```text
