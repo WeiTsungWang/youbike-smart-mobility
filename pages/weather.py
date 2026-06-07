@@ -59,7 +59,7 @@ if st.button("查詢天氣"):
             col2.metric("濕度", f"{curr['relative_humidity_2m']}%")
             col3.metric("降雨機率", f"{prob}%")
             col4.metric("風速", f"{curr['wind_speed_10m']} km/h")
-            # 這裡我們利用 weather_code 簡單轉譯狀態
+            # 這裡利用 weather_code 簡單轉譯狀態
             w_code = curr['weather_code']
             
             if w_code == 0:
@@ -77,7 +77,7 @@ if st.button("查詢天氣"):
             display_status = f"{status_emoji.get(status, '🌤️')} {status}"
             st.metric("天氣狀態", display_status)
             
-            # 2. 動態建議 (邏輯改為從 data 中讀取降雨機率)
+            # 2. 動態建議
             prob = data['daily']['precipitation_probability_max'][0] # 當日預報機率
             if prob > 50:
                 st.error(f"☔ 本日最高降雨機率 {prob}%，建議攜帶雨具。")
@@ -131,7 +131,7 @@ if st.button("查詢天氣"):
                 from datetime import datetime
                 weekdays = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"]
                 
-                # 確保資料長度一致 (Open-Meteo 通常給 7 天)
+                # 確保資料長度一致
                 length = len(daily['time'])
                 
                 # 2. 生成星期清單

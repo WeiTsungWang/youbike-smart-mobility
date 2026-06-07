@@ -205,11 +205,7 @@ if st.session_state.run_calc:
                             )
 
                 start_node = best_start
-                end_node = best_end
-
-                # st.write(f"DEBUG: start_node 的類型是 {type(start_node)}, 內容是: {start_node}")
-                # st.write(f"DEBUG: end_node 的類型是 {(end_node)}, 內容是: {end_node}")
-                
+                end_node = best_end        
 
                 # 更新座標為站點座標
                 s_lat, s_lon = float(start_node['lat']), float(start_node['lng'])
@@ -348,18 +344,12 @@ if st.session_state.run_calc:
                     min_lat, max_lat = df_route['lat'].min(), df_route['lat'].max()
                     min_lon, max_lon = df_route['lon'].min(), df_route['lon'].max()
 
-                    # 🔥 改良點 1：確保 YouBike 模式下的「原始起終點」也被包覆在視角內
+                    # 確保 YouBike 模式下的「原始起終點」也被包覆在視角內
                     if st.session_state.current_mode == "YouBike":
                         min_lat = min(min_lat, start_lat, end_lat, s_lat, e_lat)
                         max_lat = max(max_lat, start_lat, end_lat, s_lat, e_lat)
                         min_lon = min(min_lon, start_lon, end_lon, s_lon, e_lon)
                         max_lon = max(max_lon, start_lon, end_lon, s_lon, e_lon)
-
-                    # # 2. 自動計算 Zoom (改良版算法)
-                    # max_delta = max(max_lat - min_lat, max_lon - min_lon)
-                    # # 透過對數計算合適的縮放比例，並限制在 11~16 之間，避免單點過度放大或跨縣市過度縮小
-                    # zoom_level = 11.5 - math.log2(max_delta / 0.1) if max_delta > 0 else 15
-                    # zoom_level = max(11, min(16, zoom_level)) 
 
                     # --- 這裡計算所有的座標點，包含起終點與路徑 ---
                     # 確保這些點都存在
@@ -370,11 +360,11 @@ if st.session_state.run_calc:
                     mid_lat = (max(all_lats) + min(all_lats)) / 2
                     mid_lon = (max(all_lons) + min(all_lons)) / 2
 
-                    # 動態計算 Zoom (參考之前的 get_dynamic_zoom)
+                    # 動態計算 Zoom，根據經緯度範圍自動調整，確保路線完整顯示
                     max_delta = max(max(all_lats) - min(all_lats), max(all_lons) - min(all_lons))
                     zoom_level = 11.5 - math.log2(max_delta / 0.1) if max_delta > 0 else 13
 
-                    # 🔥 關鍵：建立一個 ViewState 物件
+                    # 建立一個 ViewState 物件
                     view_state = pdk.ViewState(
                         latitude=mid_lat,
                         longitude=mid_lon,
@@ -401,7 +391,7 @@ if st.session_state.run_calc:
                         bike_data = [[p[1], p[0]] for p in bike_path]
                         walk_data2 = [[p[1], p[0]] for p in walk_path2]
 
-                        # 🔥 改良點 2：加入 width_min_pixels 與 width_max_pixels
+                        # 加入 width_min_pixels 與 width_max_pixels
                         layers.append(pdk.Layer(
                             "PathLayer",
                             data=[{"path": walk_data1, "name": "步行路段"}],
@@ -435,7 +425,7 @@ if st.session_state.run_calc:
                             pickable=True,
                         ))
                         
-                        # 🔥 改良點 3：加入 radius_min_pixels 與 radius_max_pixels
+                        # 加入 radius_min_pixels 與 radius_max_pixels
                         layers.append(pdk.Layer(
                             "ScatterplotLayer",
                             data=[
@@ -475,20 +465,6 @@ if st.session_state.run_calc:
                             width_max_pixels=12,
                             pickable=True,
                         ))
-
-                    # st.pydeck_chart(
-                    #     pdk.Deck(
-                    #         initial_view_state=pdk.ViewState(
-                    #             latitude=(min_lat + max_lat) / 2,
-                    #             longitude=(min_lon + max_lon) / 2,
-                    #             zoom=zoom_level,
-                    #             pitch=0
-                    #         ),
-                    #         layers=layers,
-                    #         tooltip={"text": "{name}"}
-                    #     ),
-                    #     use_container_width=True
-                    # )
 
                     st.pydeck_chart(
                         pdk.Deck(
