@@ -152,7 +152,11 @@ if query_btn:
                     chart_data = df.nlargest(10, 'available_spaces')[['name_tw', 'available_spaces']]
                     chart = alt.Chart(chart_data).mark_bar(color='#76C8FF').encode(
                         x=alt.X('available_spaces', title='可借'),
-                        y=alt.Y('name_tw', title=['站', '點', '名', '稱'], sort='-x', axis=alt.Axis(labelLimit=300, titleAngle=0))
+                        y=alt.Y('name_tw', title=['站', '點', '名', '稱'], sort='-x', axis=alt.Axis(labelLimit=300, titleAngle=0)),
+                        tooltip=[
+                            alt.Tooltip("available_spaces", title="可借"),
+                            alt.Tooltip("name_tw", title="站點名稱")
+                        ]
                     ).properties(height=400)
                     st.altair_chart(chart.configure_axis(titleAngle=0), width='stretch')
 
@@ -160,7 +164,11 @@ if query_btn:
                     chart_data = df.nlargest(10, 'empty_spaces')[['name_tw', 'empty_spaces']]
                     chart = alt.Chart(chart_data).mark_bar(color='#76C8FF').encode(
                         x=alt.X('empty_spaces', title='可還'),
-                        y=alt.Y('name_tw', title=['站', '點', '名', '稱'], sort='-x', axis=alt.Axis(labelLimit=300, titleAngle=0))
+                        y=alt.Y('name_tw', title=['站', '點', '名', '稱'], sort='-x', axis=alt.Axis(labelLimit=300, titleAngle=0)),
+                        tooltip=[
+                            alt.Tooltip("empty_spaces", title="可還"),
+                            alt.Tooltip("name_tw", title="站點名稱")
+                        ]
                     ).properties(height=400)
                     st.altair_chart(chart.configure_axis(titleAngle=0), width='stretch')
 
