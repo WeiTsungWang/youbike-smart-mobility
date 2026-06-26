@@ -8,17 +8,22 @@ import sqlite3
 import requests
 
 def init_app():
+    # 使用絕對路徑
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    DB_PATH = os.path.join(BASE_DIR, 'stations.db')
+    COLLECTOR_PATH = os.path.join(BASE_DIR, 'data_collector.py')
+    
     # 建立一個佔位容器
     placeholder = st.empty()
     
-    if not os.path.exists('stations.db'):
+    if not os.path.exists(DB_PATH):
         # 顯示初始化訊息
         with placeholder.container():
             st.info("偵測到尚未建立站點資料庫，正在執行初始化...")
             
         try:
             # 執行爬蟲
-            subprocess.run(["python", "data_collector.py"], check=True)
+            subprocess.run([sys.executable, COLLECTOR_PATH], check=True)
             
             # 將內容替換為成功訊息
             with placeholder.container():
