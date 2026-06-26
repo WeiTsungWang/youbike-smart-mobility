@@ -1,4 +1,5 @@
 import requests
+import os
 import sqlite3
 import pandas as pd
 
@@ -8,8 +9,13 @@ STATION_URL = "https://apis.youbike.com.tw/json/station-min-yb2.json"
 def fetch_and_save_stations():
     """抓取全台站點清單並存入 SQLite"""
     try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Referer": "https://youbike.com.tw/",
+        }
+
         print("正在從 API 抓取全台站點清單...")
-        response = requests.get(STATION_URL)
+        response = requests.get(STATION_URL, headers=headers)
         response.raise_for_status()
         stations = response.json()
         
