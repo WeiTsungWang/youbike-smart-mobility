@@ -19,9 +19,12 @@ def fetch_and_save_stations():
         # 選取我們要的欄位
         # station_no: 站點ID, name_tw: 站點名稱, district_tw: 行政區, lat/lng: 經緯度, area_code_2: 縣市代碼, address_tw: 地址
         df_clean = df[['station_no', 'name_tw', 'district_tw', 'lat', 'lng', 'area_code_2', 'address_tw']]
+
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        DB_PATH = os.path.join(BASE_DIR, 'stations.db')
         
         # 存入 stations.db
-        conn = sqlite3.connect('stations.db')
+        conn = sqlite3.connect(DB_PATH)
         df_clean.to_sql('stations', conn, if_exists='replace', index=False)
         conn.close()
         
